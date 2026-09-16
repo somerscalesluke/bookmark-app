@@ -200,8 +200,8 @@ async function renderHome() {
   if (!total) { main.innerHTML = `<div class="empty"><b>Nothing saved yet</b>Share a link from any app to "Save to Bookmarks" and it will show up here.</div>`; return; }
   main.innerHTML = `<div class="eyebrow">${total} saved · ${state.boards.filter(b => b.item_count).length} boards</div>
   <div class="boards">
-    <a class="stack" href="#all"><div class="pile">${pile(state.boards.flatMap(b => b.cover_thumbnails ?? []).slice(0, 4), "All")}</div><div><div class="name">Everything</div><div class="count">${total} items</div></div></a>
-    ${state.boards.filter(b => b.item_count || b.created_by === "user").map(b => `<a class="stack ${b.name === "Unsorted" && b.item_count ? "unsorted" : ""}" href="#${b.id}"><div class="pile">${pile(b.cover_thumbnails ?? [], b.name)}</div><div><div class="name">${esc(b.name)}</div><div class="count">${b.item_count} item${b.item_count === 1 ? "" : "s"}</div></div></a>`).join("")}
+    <a class="stack" href="#all"><div class="pile">${pile(state.boards.map(b => (b.cover_thumbnails ?? [])[0]).filter(Boolean).slice(0, 4), "All")}</div><div><div class="name">Everything</div><div class="count">${total} items</div></div></a>
+    ${state.boards.filter(b => b.item_count || (b.created_by === "user" && b.name !== "Unsorted")).map(b => `<a class="stack ${b.name === "Unsorted" && b.item_count ? "unsorted" : ""}" href="#${b.id}"><div class="pile">${pile(b.cover_thumbnails ?? [], b.name)}</div><div><div class="name">${esc(b.name)}</div><div class="count">${b.item_count} item${b.item_count === 1 ? "" : "s"}</div></div></a>`).join("")}
   </div>`;
 }
 function pile(thumbs, name) {
