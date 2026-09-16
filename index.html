@@ -108,6 +108,25 @@ h1{font:700 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-.025em}
 .btn{background:var(--ink);color:var(--paper);border-radius:10px;padding:11px 16px;font-weight:600}
 .btn.ghost{background:none;color:var(--muted);border:1px solid var(--line)}
 hr.sep{border:0;border-top:1px solid var(--line);margin:8px 0}
+.field textarea{flex:1;border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:11px 12px;outline:0;min-height:96px;resize:vertical;font:inherit}
+.field textarea:focus{border-color:var(--ink)}
+.field.col{flex-direction:column}
+.lbl{font:500 11px var(--mono);color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin:10px 4px 4px}
+
+/* selection mode */
+.selecting .card a{pointer-events:none}
+.card .tick{position:absolute;top:8px;left:8px;width:26px;height:26px;border-radius:50%;border:2px solid var(--paper);background:color-mix(in srgb,var(--surface) 70%,transparent);backdrop-filter:blur(6px);display:none;place-items:center;box-shadow:var(--shadow)}
+.selecting .card .tick{display:grid}
+.selecting .card .more{display:none}
+.card.on{outline:3px solid var(--marker);outline-offset:-3px}
+.card.on .tick{background:var(--marker);border-color:var(--marker);color:#14181F}
+.card.on .tick::after{content:"";width:8px;height:13px;border:solid #14181F;border-width:0 3px 3px 0;transform:translateY(-2px) rotate(45deg)}
+.bulk{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 16px);transform:translateX(-50%);display:flex;align-items:center;gap:6px;background:var(--ink);color:var(--paper);padding:8px 8px 8px 16px;border-radius:999px;box-shadow:var(--shadow);z-index:15;max-width:calc(100% - 24px);white-space:nowrap;animation:pop .2s}
+.bulk .n{font:500 13px var(--mono);margin-right:6px}
+.bulk button{color:var(--paper);padding:8px 12px;border-radius:999px;font-weight:600;font-size:14px}
+.bulk button:hover{background:color-mix(in srgb,var(--paper) 15%,transparent)}
+.bulk button.danger{color:#FF8A75}
+.bulk button.x{opacity:.7;padding:8px 10px}
 
 /* auth + empty */
 .center{min-height:80vh;display:grid;place-items:center;text-align:center;padding:24px}
@@ -136,7 +155,8 @@ const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const state = { user: null, boards: [], items: [], board: null, q: "" };
+const state = { user: null, boards: [], items: [], board: null, q: "", selecting: false, sel: new Set() };
+const plural = (n, w = "card") => `${n} ${w}${n === 1 ? "" : "s"}`;
 const main = $("#main"), layer = $("#layer");
 
 // ---------- auth ----------
@@ -170,7 +190,7 @@ async function loadBoards() {
   state.boards = (data ?? []).sort((a, b) => (a.name === "Unsorted") - (b.name === "Unsorted") || b.item_count - a.item_count || a.name.localeCompare(b.name));
 }
 async function loadItems(boardId) {
-  let qy = sb.from("items").select("id,board_id,url,canonical_url,source,title,author,site_name,thumbnail_url,ai_summary,ai_tags,status,created_at").order("created_at", { ascending: false }).limit(600);
+  let qy = sb.from("items").select("id,board_id,url,canonical_url,source,title,description,author,site_name,thumbnail_url,original_thumbnail_url,ai_summary,ai_tags,ai_confidence,status,created_at,blurb,copied_from").order("created_at", { ascending: false }).limit(600);
   if (boardId) qy = qy.eq("board_id", boardId);
   const { data, error } = await qy;
   if (error) return toast(error.message);
@@ -194,14 +214,14 @@ $("#search").addEventListener("focus", () => { if (!location.hash) location.hash
 
 // ---------- home ----------
 async function renderHome() {
-  state.board = undefined;
+  state.board = undefined; exitSelect();
   await loadBoards();
   const total = state.boards.reduce((n, b) => n + b.item_count, 0);
   if (!total) { main.innerHTML = `<div class="empty"><b>Nothing saved yet</b>Share a link from any app to "Save to Bookmarks" and it will show up here.</div>`; return; }
-  main.innerHTML = `<div class="eyebrow">${total} saved · ${state.boards.filter(b => b.item_count).length} boards</div>
+  main.innerHTML = `<div class="eyebrow">${plural(total)} · ${state.boards.filter(b => b.item_count).length} boards</div>
   <div class="boards">
-    <a class="stack" href="#all"><div class="pile">${pile(state.boards.map(b => (b.cover_thumbnails ?? [])[0]).filter(Boolean).slice(0, 4), "All")}</div><div><div class="name">Everything</div><div class="count">${total} items</div></div></a>
-    ${state.boards.filter(b => b.item_count || (b.created_by === "user" && b.name !== "Unsorted")).map(b => `<a class="stack ${b.name === "Unsorted" && b.item_count ? "unsorted" : ""}" href="#${b.id}"><div class="pile">${pile(b.cover_thumbnails ?? [], b.name)}</div><div><div class="name">${esc(b.name)}</div><div class="count">${b.item_count} item${b.item_count === 1 ? "" : "s"}</div></div></a>`).join("")}
+    <a class="stack" href="#all"><div class="pile">${pile(state.boards.map(b => (b.cover_thumbnails ?? [])[0]).filter(Boolean).slice(0, 4), "All")}</div><div><div class="name">Everything</div><div class="count">${plural(total)}</div></div></a>
+    ${state.boards.filter(b => b.item_count || (b.created_by === "user" && b.name !== "Unsorted")).map(b => `<a class="stack ${b.name === "Unsorted" && b.item_count ? "unsorted" : ""}" href="#${b.id}"><div class="pile">${pile(b.cover_thumbnails ?? [], b.name)}</div><div><div class="name">${esc(b.name)}</div><div class="count">${plural(b.item_count)}</div></div></a>`).join("")}
   </div>`;
 }
 function pile(thumbs, name) {
@@ -212,7 +232,7 @@ function pile(thumbs, name) {
 
 // ---------- board ----------
 async function renderBoard(boardId) {
-  state.board = boardId;
+  state.board = boardId; exitSelect();
   if (!state.boards.length) await loadBoards();
   const b = boardId ? state.boards.find((x) => x.id === boardId) : null;
   if (boardId && !b) { location.hash = ""; return; }
@@ -220,58 +240,110 @@ async function renderBoard(boardId) {
     <a class="back" href="#">← boards</a>
     <h1><span class="mark">${esc(b ? b.name : "Everything")}</span></h1>
     <span class="count" id="count"></span>
-    ${b ? `<div class="actions"><button class="chip" data-act="rename">rename</button><button class="chip" data-act="merge">merge into…</button>${b.name !== "Unsorted" ? `<button class="chip danger" data-act="delete">delete</button>` : ""}</div>` : ""}
+    <div class="actions"><button class="chip" data-act="select">select</button>${b ? `<button class="chip" data-act="rename">rename</button><button class="chip" data-act="merge">merge into…</button>${b.name !== "Unsorted" ? `<button class="chip danger" data-act="delete">delete</button>` : ""}` : ""}</div>
   </div><div class="grid" id="grid"></div>`;
-  main.querySelectorAll("[data-act]").forEach((el) => el.onclick = () => boardAction(el.dataset.act, b));
+  main.querySelectorAll("[data-act]").forEach((el) => el.onclick = () => el.dataset.act === "select" ? toggleSelect() : boardAction(el.dataset.act, b));
   await loadItems(boardId);
   renderItems();
 }
+function visibleItems() {
+  const q = state.q;
+  return q ? state.items.filter((i) => [i.title, i.blurb, i.ai_summary, i.author, i.site_name, ...(i.ai_tags || [])].join(" ").toLowerCase().includes(q)) : state.items;
+}
 function renderItems() {
   const grid = $("#grid"); if (!grid) return;
-  const q = state.q;
-  const list = q ? state.items.filter((i) => [i.title, i.ai_summary, i.author, i.site_name, ...(i.ai_tags || [])].join(" ").toLowerCase().includes(q)) : state.items;
-  $("#count").textContent = q ? `${list.length} of ${state.items.length}` : `${state.items.length} item${state.items.length === 1 ? "" : "s"}`;
-  if (!list.length) { grid.innerHTML = `<div class="empty" style="column-span:all"><b>${q ? "No matches" : "Empty board"}</b>${q ? "Try another word." : "Move things here or save with this board selected."}</div>`; return; }
-  grid.innerHTML = list.map((i) => `<article class="card ${i.status === "partial" && !i.thumbnail_url ? "partial" : ""}" data-id="${i.id}">
+  const q = state.q, list = visibleItems();
+  $("#count").textContent = q ? `${list.length} of ${state.items.length}` : plural(state.items.length);
+  if (!list.length) { grid.innerHTML = `<div class="empty" style="column-span:all"><b>${q ? "No matches" : "Empty board"}</b>${q ? "Try another word." : "Move cards here, or pick this board when you save."}</div>`; return; }
+  grid.innerHTML = list.map((i) => `<article class="card ${i.status === "partial" && !i.thumbnail_url ? "partial" : ""} ${state.sel.has(i.id) ? "on" : ""}" data-id="${i.id}">
     <a href="${esc(i.url)}" target="_blank" rel="noopener">
       ${i.thumbnail_url ? `<img src="${esc(i.thumbnail_url)}" alt="" loading="lazy">` : `<div class="ph">${esc((i.site_name || hostOf(i.url)).slice(0, 1).toUpperCase())}</div>`}
       <div class="body"><div class="title">${esc(i.title || hostOf(i.url))}</div>
-      ${i.ai_summary ? `<div class="summary">${esc(i.ai_summary)}</div>` : ""}
+      ${(i.blurb || i.ai_summary) ? `<div class="summary">${esc(i.blurb || i.ai_summary)}</div>` : ""}
       <div class="meta"><span class="src">${esc(i.source === "article" ? hostOf(i.url).replace(/^www\./, "").split(".")[0] : i.source)}</span><span>${esc(i.author || i.site_name || "")}</span></div></div>
     </a>
+    <span class="tick" aria-hidden="true"></span>
     <button class="more" aria-label="More" data-more="${i.id}"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
   </article>`).join("");
   grid.querySelectorAll("[data-more]").forEach((el) => el.onclick = (e) => { e.preventDefault(); itemMenu(el.dataset.more); });
+  grid.querySelectorAll(".card").forEach((el) => el.addEventListener("click", (e) => { if (!state.selecting) return; e.preventDefault(); toggleOne(el.dataset.id); }));
+  renderBulk();
 }
 const hostOf = (u) => { try { return new URL(u).hostname; } catch { return ""; } };
 
-// ---------- item actions ----------
+// ---------- selection mode ----------
+function toggleSelect() { state.selecting ? exitSelect() : enterSelect(); }
+function enterSelect() { state.selecting = true; state.sel.clear(); main.classList.add("selecting"); const c = main.querySelector('[data-act="select"]'); if (c) c.textContent = "done"; renderItems(); }
+function exitSelect() { state.selecting = false; state.sel.clear(); main.classList.remove("selecting"); const c = main.querySelector('[data-act="select"]'); if (c) c.textContent = "select"; $("#bulk")?.remove(); }
+function toggleOne(id) { state.sel.has(id) ? state.sel.delete(id) : state.sel.add(id); main.querySelector(`.card[data-id="${id}"]`)?.classList.toggle("on", state.sel.has(id)); renderBulk(); }
+function renderBulk() {
+  $("#bulk")?.remove(); if (!state.selecting) return;
+  const n = state.sel.size, all = visibleItems().length;
+  layer.insertAdjacentHTML("beforeend", `<div class="bulk" id="bulk"><span class="n">${n} of ${all}</span>
+    <button data-b="all">${n === all ? "None" : "All"}</button>${n ? `<button data-b="move">Move</button><button data-b="copy">Copy</button><button class="danger" data-b="delete">Delete</button>` : ""}<button class="x" data-b="x" aria-label="Done">✕</button></div>`);
+  $("#bulk").querySelectorAll("[data-b]").forEach((el) => el.onclick = () => bulkAction(el.dataset.b));
+}
+async function bulkAction(a) {
+  const ids = [...state.sel];
+  if (a === "x") return exitSelect();
+  if (a === "all") { const v = visibleItems(); if (state.sel.size === v.length) state.sel.clear(); else v.forEach((i) => state.sel.add(i.id)); return renderItems(); }
+  if (a === "delete") {
+    if (!confirm(`Delete ${plural(ids.length)}? This can't be undone.`)) return;
+    const { error } = await sb.from("items").delete().in("id", ids); if (error) return toast(error.message);
+    state.items = state.items.filter((x) => !state.sel.has(x.id)); loadBoards(); exitSelect(); renderItems(); toast(`Deleted ${plural(ids.length)}`);
+  }
+  if (a === "move" || a === "copy") pickBoard(a === "move" ? `Move ${plural(ids.length)} to` : `Copy ${plural(ids.length)} to`, (boardId) => a === "move" ? moveMany(ids, boardId) : copyMany(ids, boardId));
+}
+function pickBoard(title, onPick, excludeBoardId) {
+  const opts = state.boards.filter((b) => b.id !== excludeBoardId).map((b) => `<button class="opt" data-a="b:${b.id}">${esc(b.name)}<span class="k">${b.item_count}</span></button>`).join("");
+  sheet(`<h2>${esc(title)}</h2><form class="field" id="newb"><input placeholder="New board name" id="nb"><button class="btn">Create</button></form>${opts}`,
+    (a) => { if (a.startsWith("b:")) onPick(a.slice(2)); },
+    async (form) => { const name = $("#nb", form).value.trim(); if (!name) return; const b = await createBoard(name); if (b) onPick(b.id); });
+}
+async function moveMany(ids, boardId) {
+  const { error } = await sb.from("items").update({ board_id: boardId, filed_by: "user" }).in("id", ids); if (error) return toast(error.message);
+  const name = boardName(boardId);
+  state.items.forEach((i) => { if (ids.includes(i.id)) i.board_id = boardId; });
+  if (state.board) state.items = state.items.filter((i) => i.board_id === state.board);
+  loadBoards(); closeSheet(); exitSelect(); renderItems(); toast(`Moved ${plural(ids.length)} to ${name}`);
+}
+async function copyMany(ids, boardId) {
+  const src = state.items.filter((i) => ids.includes(i.id) && i.board_id !== boardId);
+  if (!src.length) { closeSheet(); return toast("Already on that board"); }
+  const rows = src.map((i) => ({ user_id: state.user.id, board_id: boardId, url: i.url, canonical_url: i.canonical_url, source: i.source, title: i.title, description: i.description, author: i.author, site_name: i.site_name, thumbnail_url: i.thumbnail_url, original_thumbnail_url: i.original_thumbnail_url, ai_summary: i.ai_summary, ai_tags: i.ai_tags, ai_confidence: i.ai_confidence, blurb: i.blurb, filed_by: "user", status: i.status, copied_from: i.copied_from || i.id }));
+  const { data, error } = await sb.from("items").insert(rows).select("id"); if (error) return toast(error.message);
+  loadBoards(); closeSheet(); exitSelect(); if (!state.board) { await loadItems(null); renderItems(); } toast(`Copied ${plural(data.length)} to ${boardName(boardId)}`);
+}
+const boardName = (id) => state.boards.find((b) => b.id === id)?.name ?? "board";
+
+// ---------- single card actions ----------
 function itemMenu(id) {
   const it = state.items.find((x) => x.id === id); if (!it) return;
   const cur = state.boards.find((b) => b.id === it.board_id);
-  sheet(`<h2>${esc(it.title || hostOf(it.url))}</h2><div class="sub">${cur ? "In " + esc(cur.name) : ""}</div>
+  sheet(`<h2>${esc(it.title || hostOf(it.url))}</h2><div class="sub">${cur ? "In " + esc(cur.name) : ""}${it.copied_from ? " · copy" : ""}</div>
     <button class="opt" data-a="open">Open original <span class="k">${esc(hostOf(it.url))}</span></button>
+    <button class="opt" data-a="edit">Edit title & description</button>
     <button class="opt" data-a="move">Move to another board</button>
+    <button class="opt" data-a="copyto">Copy to another board</button>
     <button class="opt" data-a="copy">Copy link</button>
     <hr class="sep"><button class="opt danger" data-a="delete">Delete</button>`, async (a) => {
     if (a === "open") window.open(it.url, "_blank");
     if (a === "copy") { await navigator.clipboard.writeText(it.url); toast("Link copied"); }
-    if (a === "move") moveMenu(it);
-    if (a === "delete") { if (!confirm("Delete this saved item?")) return; const { error } = await sb.from("items").delete().eq("id", it.id); if (error) return toast(error.message); state.items = state.items.filter((x) => x.id !== it.id); loadBoards(); renderItems(); toast("Deleted"); }
+    if (a === "edit") editItem(it);
+    if (a === "move") pickBoard("Move to", (b) => moveMany([it.id], b), it.board_id);
+    if (a === "copyto") pickBoard("Copy to", (b) => copyMany([it.id], b), it.board_id);
+    if (a === "delete") { if (!confirm("Delete this card?")) return; const { error } = await sb.from("items").delete().eq("id", it.id); if (error) return toast(error.message); state.items = state.items.filter((x) => x.id !== it.id); loadBoards(); renderItems(); toast("Deleted"); }
   });
 }
-function moveMenu(it) {
-  const opts = state.boards.filter((b) => b.id !== it.board_id).map((b) => `<button class="opt" data-a="b:${b.id}">${esc(b.name)}<span class="k">${b.item_count}</span></button>`).join("");
-  sheet(`<h2>Move to</h2><form class="field" id="newb"><input placeholder="New board name" id="nb"><button class="btn">Create</button></form>${opts}`, async (a) => {
-    if (a.startsWith("b:")) moveItem(it, a.slice(2));
-  }, async (form) => { const name = $("#nb", form).value.trim(); if (!name) return; const b = await createBoard(name); if (b) moveItem(it, b.id); });
-}
-async function moveItem(it, boardId) {
-  const { error } = await sb.from("items").update({ board_id: boardId, filed_by: "user" }).eq("id", it.id);
-  if (error) return toast(error.message);
-  const name = state.boards.find((b) => b.id === boardId)?.name ?? "board";
-  it.board_id = boardId; if (state.board) state.items = state.items.filter((x) => x.id !== it.id);
-  loadBoards(); closeSheet(); renderItems(); toast(`Moved to ${name}`);
+function editItem(it) {
+  sheet(`<h2>Edit card</h2><form id="ef"><div class="lbl">Title</div><div class="field"><input id="et" value="${esc(it.title || "")}" maxlength="300"></div>
+    <div class="lbl">Description</div><div class="field col"><textarea id="ed" maxlength="1000" placeholder="${esc(it.ai_summary || "What is this and why did you save it?")}">${esc(it.blurb || "")}</textarea></div>
+    <div class="field" style="justify-content:flex-end"><button type="button" class="btn ghost" id="ecancel">Cancel</button><button class="btn">Save</button></div></form>`, () => {}, async (form) => {
+    const title = $("#et", form).value.trim(), blurb = $("#ed", form).value.trim();
+    const { error } = await sb.from("items").update({ title: title || it.title, blurb: blurb || null }).eq("id", it.id); if (error) return toast(error.message);
+    it.title = title || it.title; it.blurb = blurb || null; closeSheet(); renderItems(); toast("Saved");
+  });
+  $("#ecancel").onclick = closeSheet;
 }
 async function createBoard(name) {
   const { data, error } = await sb.from("boards").insert({ user_id: state.user.id, name, created_by: "user" }).select().single();
@@ -290,14 +362,14 @@ async function boardAction(act, b) {
   }
   if (act === "merge") {
     const opts = state.boards.filter((x) => x.id !== b.id).map((x) => `<button class="opt" data-a="${x.id}">${esc(x.name)}<span class="k">${x.item_count}</span></button>`).join("");
-    sheet(`<h2>Merge “${esc(b.name)}” into…</h2><div class="sub">All ${b.item_count} items move there and this board is removed.</div>${opts}`, async (target) => {
+    sheet(`<h2>Merge “${esc(b.name)}” into…</h2><div class="sub">All ${plural(b.item_count)} move there and this board is removed.</div>${opts}`, async (target) => {
       const { error } = await sb.from("items").update({ board_id: target }).eq("board_id", b.id); if (error) return toast(error.message);
       if (b.name !== "Unsorted") await sb.from("boards").delete().eq("id", b.id);
       closeSheet(); await loadBoards(); location.hash = "#" + target; toast("Merged");
     });
   }
   if (act === "delete") {
-    if (!confirm(`Delete “${b.name}”? Its ${b.item_count} items move to Unsorted.`)) return;
+    if (!confirm(`Delete “${b.name}”? Its ${plural(b.item_count)} move to Unsorted.`)) return;
     let uns = state.boards.find((x) => x.name === "Unsorted") || await createBoard("Unsorted");
     if (b.item_count) { const { error } = await sb.from("items").update({ board_id: uns.id }).eq("board_id", b.id); if (error) return toast(error.message); }
     await sb.from("boards").delete().eq("id", b.id);
@@ -307,15 +379,15 @@ async function boardAction(act, b) {
 
 // ---------- ui bits ----------
 function sheet(html, onPick, onSubmit) {
-  layer.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog">${html}</div></div>`;
+  $("#scrim")?.remove(); layer.insertAdjacentHTML("beforeend", `<div class="scrim" id="scrim"><div class="sheet" role="dialog">${html}</div></div>`);
   $("#scrim").onclick = (e) => { if (e.target.id === "scrim") closeSheet(); };
-  layer.querySelectorAll("[data-a]").forEach((el) => el.onclick = () => { const a = el.dataset.a; if (!["move"].includes(a)) closeSheet(); onPick(a); });
+  layer.querySelectorAll("[data-a]").forEach((el) => el.onclick = () => { const a = el.dataset.a; if (!["move", "copyto", "edit"].includes(a)) closeSheet(); onPick(a); });
   const form = layer.querySelector("form"); if (form && onSubmit) form.onsubmit = (e) => { e.preventDefault(); onSubmit(form); };
   layer.querySelector("input")?.focus();
 }
-function closeSheet() { layer.innerHTML = ""; }
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
-let toastT; function toast(msg) { clearTimeout(toastT); layer.insertAdjacentHTML("beforeend", `<div class="toast" id="toast">${esc(msg)}</div>`); toastT = setTimeout(() => $("#toast")?.remove(), 2200); }
+function closeSheet() { $("#scrim")?.remove(); }
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#scrim") ? closeSheet() : exitSelect(); } });
+let toastT; function toast(msg) { clearTimeout(toastT); $("#toast")?.remove(); layer.insertAdjacentHTML("beforeend", `<div class="toast" id="toast">${esc(msg)}</div>`); toastT = setTimeout(() => $("#toast")?.remove(), 2200); }
 document.addEventListener("visibilitychange", () => { if (!document.hidden && state.user) route(); });
 boot();
 </script>
