@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Saved</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Saved">
+<meta name="theme-color" content="#EEF0F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14171C" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2314181F'/%3E%3Crect x='14' y='30' width='36' height='12' fill='%23FFE45C' transform='rotate(-6 32 36)'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF0F3; --surface:#FFFFFF; --ink:#14181F; --muted:#6C7380; --line:#D9DDE3; --marker:#FFE45C; --danger:#C8321F;
+  --shadow:0 1px 2px rgba(20,24,31,.06),0 8px 24px -12px rgba(20,24,31,.25);
+  --display:"Bricolage Grotesque",system-ui,sans-serif; --body:"Inter Tight",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --gutter:clamp(16px,3vw,32px); --r:14px;
+}
+@media (prefers-color-scheme:dark){:root{--paper:#14171C;--surface:#1D2127;--ink:#ECEEF1;--muted:#8B93A0;--line:#2C323B;--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6)}}
+*{box-sizing:border-box;margin:0}
+html,body{background:var(--paper);color:var(--ink);font:15px/1.45 var(--body);-webkit-font-smoothing:antialiased;min-height:100%}
+button,input{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;padding:0}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:3px solid var(--marker);outline-offset:2px}
+.hide{display:none!important}
+
+/* header */
+header{display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 14px) var(--gutter) 10px;position:sticky;top:0;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(14px);z-index:5}
+.brand{font:700 26px/1 var(--display);letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.brand i{display:inline-block;width:22px;height:9px;background:var(--marker);transform:rotate(-6deg);border-radius:2px}
+.search{flex:1;max-width:420px;margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 14px}
+.search input{flex:1;border:0;background:none;outline:0;min-width:0}
+.search input::placeholder{color:var(--muted)}
+.iconbtn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.iconbtn:hover{background:var(--surface);color:var(--ink)}
+
+main{padding:8px var(--gutter) calc(env(safe-area-inset-bottom) + 48px);max-width:1400px;margin:0 auto}
+.eyebrow{font:500 12px/1 var(--mono);color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin:18px 0 14px}
+h1{font:700 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-.025em}
+.mark{position:relative;display:inline-block}
+.mark::after{content:"";position:absolute;left:-.1em;right:-.1em;bottom:.08em;height:.38em;background:var(--marker);z-index:-1;transform:rotate(-1.2deg);border-radius:2px}
+@media (prefers-color-scheme:dark){.mark::after{opacity:.85}}
+
+/* board stacks */
+.boards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:26px 20px}
+.stack{text-align:left;display:flex;flex-direction:column;gap:10px}
+.pile{position:relative;aspect-ratio:1/1;width:100%}
+.pile img,.pile .blank{position:absolute;inset:8%;width:84%;height:84%;object-fit:cover;border-radius:10px;background:var(--surface);box-shadow:var(--shadow);border:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+.pile .blank{display:grid;place-items:center;color:var(--muted);font:500 12px var(--mono)}
+.pile > :nth-child(1){transform:rotate(-7deg) translate(-4%,2%)}
+.pile > :nth-child(2){transform:rotate(4deg) translate(5%,-1%)}
+.pile > :nth-child(3){transform:rotate(-2deg) translate(1%,-4%)}
+.pile > :nth-child(4){transform:rotate(1deg)}
+.stack:hover .pile > :nth-child(1){transform:rotate(-10deg) translate(-8%,3%)}
+.stack:hover .pile > :nth-child(2){transform:rotate(7deg) translate(9%,-2%)}
+.pile>*{transition:transform .25s cubic-bezier(.2,.7,.2,1)}
+.stack .name{font:700 17px/1.2 var(--display);letter-spacing:-.01em}
+.stack .count{font:500 12px var(--mono);color:var(--muted);margin-top:2px}
+.stack.unsorted .name::after{content:"needs sorting";font:500 10px var(--mono);color:var(--ink);background:var(--marker);padding:2px 6px;border-radius:4px;margin-left:8px;vertical-align:middle;letter-spacing:.04em}
+
+/* board page */
+.boardhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 18px;margin:14px 0 18px}
+.back{font:500 13px var(--mono);color:var(--muted);letter-spacing:.04em}
+.back:hover{color:var(--ink)}
+.boardhead .count{font:500 13px var(--mono);color:var(--muted)}
+.boardhead .actions{margin-left:auto;display:flex;gap:4px}
+.chip{font:500 12px var(--mono);letter-spacing:.03em;padding:7px 11px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:var(--surface)}
+.chip:hover{color:var(--ink);border-color:var(--ink)}
+.chip.danger:hover{color:var(--danger);border-color:var(--danger)}
+
+/* items masonry */
+.grid{columns:5 220px;column-gap:16px}
+.card{break-inside:avoid;display:block;margin:0 0 16px;background:var(--surface);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);position:relative;transition:transform .2s}
+.card:hover{transform:translateY(-2px)}
+.card img{display:block;width:100%;height:auto;background:var(--line)}
+.card .ph{aspect-ratio:4/3;display:grid;place-items:center;background:linear-gradient(135deg,var(--paper),var(--surface));color:var(--muted);font:700 40px var(--display);letter-spacing:-.04em}
+.card .body{padding:11px 12px 12px}
+.card .title{font:600 14px/1.3 var(--body);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.card .meta{display:flex;align-items:center;gap:8px;margin-top:8px;font:500 11px var(--mono);color:var(--muted);letter-spacing:.03em;min-width:0}
+.card .meta .src{color:var(--ink);background:var(--paper);padding:2px 6px;border-radius:4px;text-transform:uppercase}
+.card .meta span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .more{position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;background:color-mix(in srgb,var(--surface) 85%,transparent);backdrop-filter:blur(6px);display:grid;place-items:center;color:var(--ink);opacity:0;transition:opacity .15s;box-shadow:var(--shadow)}
+.card:hover .more,.card:focus-within .more{opacity:1}
+@media (hover:none){.card .more{opacity:1}}
+.card .summary{font-size:13px;color:var(--muted);margin-top:6px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.card.partial .title::before{content:"no preview · ";color:var(--muted);font-weight:500}
+
+/* sheet / dialogs */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+@media (min-width:640px){.scrim{align-items:center}}
+.sheet{background:var(--surface);width:min(100%,480px);max-height:80vh;overflow:auto;border-radius:20px 20px 0 0;padding:14px 16px calc(env(safe-area-inset-bottom) + 16px);box-shadow:var(--shadow)}
+@media (min-width:640px){.sheet{border-radius:18px}}
+.sheet h2{font:700 20px/1.2 var(--display);margin:6px 4px 12px;letter-spacing:-.02em}
+.sheet .sub{color:var(--muted);font-size:13px;margin:-8px 4px 12px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 10px;border-radius:10px;font-size:15px}
+.opt:hover{background:var(--paper)}
+.opt .k{font:500 11px var(--mono);color:var(--muted);margin-left:auto}
+.opt.danger{color:var(--danger)}
+.opt.current{font-weight:600}
+.opt.current::after{content:"current";font:500 10px var(--mono);background:var(--marker);color:#14181F;padding:2px 6px;border-radius:4px;margin-left:auto}
+.field{display:flex;gap:8px;margin:6px 4px 10px}
+.field input{flex:1;border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:11px 12px;outline:0}
+.field input:focus{border-color:var(--ink)}
+.btn{background:var(--ink);color:var(--paper);border-radius:10px;padding:11px 16px;font-weight:600}
+.btn.ghost{background:none;color:var(--muted);border:1px solid var(--line)}
+hr.sep{border:0;border-top:1px solid var(--line);margin:8px 0}
+
+/* auth + empty */
+.center{min-height:80vh;display:grid;place-items:center;text-align:center;padding:24px}
+.center .box{max-width:360px}
+.center p{color:var(--muted);margin:8px 0 18px}
+.empty{color:var(--muted);text-align:center;padding:60px 20px;font-size:15px}
+.empty b{color:var(--ink);display:block;font:700 22px var(--display);margin-bottom:6px}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-weight:500;z-index:30;box-shadow:var(--shadow);animation:pop .2s}
+@keyframes pop{from{opacity:0;transform:translate(-50%,8px)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="#" id="home"><i></i>Saved</a>
+  <label class="search hide" id="searchWrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="search" type="search" placeholder="Search everything you saved" autocomplete="off"></label>
+  <button class="iconbtn hide" id="signout" title="Sign out" aria-label="Sign out"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M21 4v16"/></svg></button>
+</header>
+<main id="main"></main>
+<div id="layer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://dmqrroajctiiojbtsxbu.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtcXJyb2FqY3RpaW9qYnRzeGJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1Mjc0MTksImV4cCI6MjEwNTEwMzQxOX0.ZyVQmtLl1R7gTy67WFVJnFQJVdaK55rymA_vU8-ou4w";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const state = { user: null, boards: [], items: [], board: null, q: "" };
+const main = $("#main"), layer = $("#layer");
+
+// ---------- auth ----------
+async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  state.user = session?.user ?? null;
+  sb.auth.onAuthStateChange((_e, s) => { const was = !!state.user; state.user = s?.user ?? null; if (!!state.user !== was) route(); });
+  if (location.hash.includes("access_token") || location.search.includes("code=")) history.replaceState(null, "", location.pathname);
+  route();
+}
+function renderAuth(sent) {
+  $("#searchWrap").classList.add("hide"); $("#signout").classList.add("hide");
+  main.innerHTML = `<div class="center"><div class="box">
+    <h1><span class="mark">Saved</span></h1>
+    <p>${sent ? "Check your email for a sign-in link. Open it on this device." : "Everything you shared from your phone, sorted into boards."}</p>
+    ${sent ? "" : `<form id="authForm" class="field" style="margin:0"><input id="email" type="email" required placeholder="you@example.com" autocomplete="email"><button class="btn">Send link</button></form>`}
+  </div></div>`;
+  $("#authForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("#email").value.trim();
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+    if (error) return toast(error.message);
+    renderAuth(true);
+  });
+}
+
+// ---------- data ----------
+async function loadBoards() {
+  const { data, error } = await sb.from("board_summaries").select("*").order("name");
+  if (error) return toast(error.message);
+  state.boards = (data ?? []).sort((a, b) => (a.name === "Unsorted") - (b.name === "Unsorted") || b.item_count - a.item_count || a.name.localeCompare(b.name));
+}
+async function loadItems(boardId) {
+  let qy = sb.from("items").select("id,board_id,url,canonical_url,source,title,author,site_name,thumbnail_url,ai_summary,ai_tags,status,created_at").order("created_at", { ascending: false }).limit(600);
+  if (boardId) qy = qy.eq("board_id", boardId);
+  const { data, error } = await qy;
+  if (error) return toast(error.message);
+  state.items = data ?? [];
+}
+
+// ---------- routing ----------
+function route() {
+  if (!state.user) return renderAuth(false);
+  $("#searchWrap").classList.remove("hide"); $("#signout").classList.remove("hide");
+  const id = location.hash.replace(/^#\/?/, "");
+  if (id === "all") return renderBoard(null);
+  if (id) return renderBoard(id);
+  renderHome();
+}
+window.addEventListener("hashchange", route);
+$("#home").onclick = (e) => { e.preventDefault(); location.hash = ""; };
+$("#signout").onclick = async () => { await sb.auth.signOut(); location.hash = ""; };
+$("#search").addEventListener("input", (e) => { state.q = e.target.value.trim().toLowerCase(); if (state.board === undefined) return; renderItems(); });
+$("#search").addEventListener("focus", () => { if (!location.hash) location.hash = "#all"; });
+
+// ---------- home ----------
+async function renderHome() {
+  state.board = undefined;
+  await loadBoards();
+  const total = state.boards.reduce((n, b) => n + b.item_count, 0);
+  if (!total) { main.innerHTML = `<div class="empty"><b>Nothing saved yet</b>Share a link from any app to "Save to Bookmarks" and it will show up here.</div>`; return; }
+  main.innerHTML = `<div class="eyebrow">${total} saved · ${state.boards.filter(b => b.item_count).length} boards</div>
+  <div class="boards">
+    <a class="stack" href="#all"><div class="pile">${pile(state.boards.flatMap(b => b.cover_thumbnails ?? []).slice(0, 4), "All")}</div><div><div class="name">Everything</div><div class="count">${total} items</div></div></a>
+    ${state.boards.filter(b => b.item_count || b.created_by === "user").map(b => `<a class="stack ${b.name === "Unsorted" && b.item_count ? "unsorted" : ""}" href="#${b.id}"><div class="pile">${pile(b.cover_thumbnails ?? [], b.name)}</div><div><div class="name">${esc(b.name)}</div><div class="count">${b.item_count} item${b.item_count === 1 ? "" : "s"}</div></div></a>`).join("")}
+  </div>`;
+}
+function pile(thumbs, name) {
+  const t = thumbs.filter(Boolean).slice(0, 4).reverse();
+  if (!t.length) return `<div class="blank">${esc(name.slice(0, 2).toUpperCase())}</div>`;
+  return t.map((u) => `<img src="${esc(u)}" alt="" loading="lazy">`).join("");
+}
+
+// ---------- board ----------
+async function renderBoard(boardId) {
+  state.board = boardId;
+  if (!state.boards.length) await loadBoards();
+  const b = boardId ? state.boards.find((x) => x.id === boardId) : null;
+  if (boardId && !b) { location.hash = ""; return; }
+  main.innerHTML = `<div class="boardhead">
+    <a class="back" href="#">← boards</a>
+    <h1><span class="mark">${esc(b ? b.name : "Everything")}</span></h1>
+    <span class="count" id="count"></span>
+    ${b ? `<div class="actions"><button class="chip" data-act="rename">rename</button><button class="chip" data-act="merge">merge into…</button>${b.name !== "Unsorted" ? `<button class="chip danger" data-act="delete">delete</button>` : ""}</div>` : ""}
+  </div><div class="grid" id="grid"></div>`;
+  main.querySelectorAll("[data-act]").forEach((el) => el.onclick = () => boardAction(el.dataset.act, b));
+  await loadItems(boardId);
+  renderItems();
+}
+function renderItems() {
+  const grid = $("#grid"); if (!grid) return;
+  const q = state.q;
+  const list = q ? state.items.filter((i) => [i.title, i.ai_summary, i.author, i.site_name, ...(i.ai_tags || [])].join(" ").toLowerCase().includes(q)) : state.items;
+  $("#count").textContent = q ? `${list.length} of ${state.items.length}` : `${state.items.length} item${state.items.length === 1 ? "" : "s"}`;
+  if (!list.length) { grid.innerHTML = `<div class="empty" style="column-span:all"><b>${q ? "No matches" : "Empty board"}</b>${q ? "Try another word." : "Move things here or save with this board selected."}</div>`; return; }
+  grid.innerHTML = list.map((i) => `<article class="card ${i.status === "partial" && !i.thumbnail_url ? "partial" : ""}" data-id="${i.id}">
+    <a href="${esc(i.url)}" target="_blank" rel="noopener">
+      ${i.thumbnail_url ? `<img src="${esc(i.thumbnail_url)}" alt="" loading="lazy">` : `<div class="ph">${esc((i.site_name || hostOf(i.url)).slice(0, 1).toUpperCase())}</div>`}
+      <div class="body"><div class="title">${esc(i.title || hostOf(i.url))}</div>
+      ${i.ai_summary ? `<div class="summary">${esc(i.ai_summary)}</div>` : ""}
+      <div class="meta"><span class="src">${esc(i.source === "article" ? hostOf(i.url).replace(/^www\./, "").split(".")[0] : i.source)}</span><span>${esc(i.author || i.site_name || "")}</span></div></div>
+    </a>
+    <button class="more" aria-label="More" data-more="${i.id}"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+  </article>`).join("");
+  grid.querySelectorAll("[data-more]").forEach((el) => el.onclick = (e) => { e.preventDefault(); itemMenu(el.dataset.more); });
+}
+const hostOf = (u) => { try { return new URL(u).hostname; } catch { return ""; } };
+
+// ---------- item actions ----------
+function itemMenu(id) {
+  const it = state.items.find((x) => x.id === id); if (!it) return;
+  const cur = state.boards.find((b) => b.id === it.board_id);
+  sheet(`<h2>${esc(it.title || hostOf(it.url))}</h2><div class="sub">${cur ? "In " + esc(cur.name) : ""}</div>
+    <button class="opt" data-a="open">Open original <span class="k">${esc(hostOf(it.url))}</span></button>
+    <button class="opt" data-a="move">Move to another board</button>
+    <button class="opt" data-a="copy">Copy link</button>
+    <hr class="sep"><button class="opt danger" data-a="delete">Delete</button>`, async (a) => {
+    if (a === "open") window.open(it.url, "_blank");
+    if (a === "copy") { await navigator.clipboard.writeText(it.url); toast("Link copied"); }
+    if (a === "move") moveMenu(it);
+    if (a === "delete") { if (!confirm("Delete this saved item?")) return; const { error } = await sb.from("items").delete().eq("id", it.id); if (error) return toast(error.message); state.items = state.items.filter((x) => x.id !== it.id); loadBoards(); renderItems(); toast("Deleted"); }
+  });
+}
+function moveMenu(it) {
+  const opts = state.boards.filter((b) => b.id !== it.board_id).map((b) => `<button class="opt" data-a="b:${b.id}">${esc(b.name)}<span class="k">${b.item_count}</span></button>`).join("");
+  sheet(`<h2>Move to</h2><form class="field" id="newb"><input placeholder="New board name" id="nb"><button class="btn">Create</button></form>${opts}`, async (a) => {
+    if (a.startsWith("b:")) moveItem(it, a.slice(2));
+  }, async (form) => { const name = $("#nb", form).value.trim(); if (!name) return; const b = await createBoard(name); if (b) moveItem(it, b.id); });
+}
+async function moveItem(it, boardId) {
+  const { error } = await sb.from("items").update({ board_id: boardId, filed_by: "user" }).eq("id", it.id);
+  if (error) return toast(error.message);
+  const name = state.boards.find((b) => b.id === boardId)?.name ?? "board";
+  it.board_id = boardId; if (state.board) state.items = state.items.filter((x) => x.id !== it.id);
+  loadBoards(); closeSheet(); renderItems(); toast(`Moved to ${name}`);
+}
+async function createBoard(name) {
+  const { data, error } = await sb.from("boards").insert({ user_id: state.user.id, name, created_by: "user" }).select().single();
+  if (error) { toast(error.message.includes("duplicate") ? "A board with that name already exists" : error.message); return null; }
+  await loadBoards(); return data;
+}
+
+// ---------- board actions ----------
+async function boardAction(act, b) {
+  if (act === "rename") {
+    sheet(`<h2>Rename board</h2><form class="field" id="rn"><input id="rname" value="${esc(b.name)}" autofocus><button class="btn">Save</button></form>`, () => {}, async (form) => {
+      const name = $("#rname", form).value.trim(); if (!name || name === b.name) return closeSheet();
+      const { error } = await sb.from("boards").update({ name }).eq("id", b.id); if (error) return toast(error.message);
+      closeSheet(); await loadBoards(); renderBoard(b.id); toast("Renamed");
+    });
+  }
+  if (act === "merge") {
+    const opts = state.boards.filter((x) => x.id !== b.id).map((x) => `<button class="opt" data-a="${x.id}">${esc(x.name)}<span class="k">${x.item_count}</span></button>`).join("");
+    sheet(`<h2>Merge “${esc(b.name)}” into…</h2><div class="sub">All ${b.item_count} items move there and this board is removed.</div>${opts}`, async (target) => {
+      const { error } = await sb.from("items").update({ board_id: target }).eq("board_id", b.id); if (error) return toast(error.message);
+      if (b.name !== "Unsorted") await sb.from("boards").delete().eq("id", b.id);
+      closeSheet(); await loadBoards(); location.hash = "#" + target; toast("Merged");
+    });
+  }
+  if (act === "delete") {
+    if (!confirm(`Delete “${b.name}”? Its ${b.item_count} items move to Unsorted.`)) return;
+    let uns = state.boards.find((x) => x.name === "Unsorted") || await createBoard("Unsorted");
+    if (b.item_count) { const { error } = await sb.from("items").update({ board_id: uns.id }).eq("board_id", b.id); if (error) return toast(error.message); }
+    await sb.from("boards").delete().eq("id", b.id);
+    loadBoards(); location.hash = ""; toast("Board deleted");
+  }
+}
+
+// ---------- ui bits ----------
+function sheet(html, onPick, onSubmit) {
+  layer.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog">${html}</div></div>`;
+  $("#scrim").onclick = (e) => { if (e.target.id === "scrim") closeSheet(); };
+  layer.querySelectorAll("[data-a]").forEach((el) => el.onclick = () => { const a = el.dataset.a; if (!["move"].includes(a)) closeSheet(); onPick(a); });
+  const form = layer.querySelector("form"); if (form && onSubmit) form.onsubmit = (e) => { e.preventDefault(); onSubmit(form); };
+  layer.querySelector("input")?.focus();
+}
+function closeSheet() { layer.innerHTML = ""; }
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+let toastT; function toast(msg) { clearTimeout(toastT); layer.insertAdjacentHTML("beforeend", `<div class="toast" id="toast">${esc(msg)}</div>`); toastT = setTimeout(() => $("#toast")?.remove(), 2200); }
+document.addEventListener("visibilitychange", () => { if (!document.hidden && state.user) route(); });
+boot();
+</script>
+</body>
+</html>
