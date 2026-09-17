@@ -1,4 +1,4 @@
-// bookmark-app — ingest edge function (v6)
+// bookmark-app — ingest edge function (v7)
 // POST /ingest  { url, mode?: "auto" | "board", board_id?, board_name?, note? }
 // Auth: x-api-key header (static key issued per user, hashed in public.api_keys)
 //
@@ -386,8 +386,8 @@ async function ensureBoard(userId: string, name: string, description: string, cr
 
 // ---------- board descriptions (v6) ----------
 // User-created boards start with no description, so the classifier under-picks them. Once a board holds
-// >= 3 cards, write a one-sentence description from what's actually on it. Runs in the background after a save.
-const DESCRIBE_MIN = Number(Deno.env.get("DESCRIBE_MIN_ITEMS") ?? "3");
+// >= 5 cards (DESCRIBE_MIN_ITEMS), write a one-sentence description from what's actually on it. Runs in the background after a save.
+const DESCRIBE_MIN = Number(Deno.env.get("DESCRIBE_MIN_ITEMS") ?? "5");
 const DESC_SCHEMA = { name: "board_description", strict: true, schema: { type: "object", additionalProperties: false, properties: { description: { type: "string" } }, required: ["description"] } };
 async function describeBoard(userId: string, boardId: string, force = false): Promise<{ board: string; ok: boolean; description?: string; reason?: string }> {
   const { data: b } = await db.from("boards").select("id,name,description,created_by").eq("id", boardId).eq("user_id", userId).maybeSingle();
