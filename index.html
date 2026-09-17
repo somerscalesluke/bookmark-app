@@ -447,15 +447,17 @@ function itemMenu(id) {
   const cur = state.boards.find((b) => b.id === it.board_id);
   sheet(`<h2>${esc(it.title || hostOf(it.url))}</h2><div class="sub">${cur ? "In " + esc(cur.name) : ""}${it.copied_from ? " · copy" : ""}</div>
     <button class="opt" data-a="preview">${embedOf(it) ? "Preview in app" : "Read in app"}</button>
-    ${embedOf(it) ? "" : `<button class="opt" data-a="refresh">Refresh article text</button>`}
     <button class="opt" data-a="open">Open in browser <span class="k">${esc(hostOf(it.url))}</span></button>
     <button class="opt" data-a="edit">Edit title & description</button>
     <button class="opt" data-a="move">Move to another board</button>
     <button class="opt" data-a="copyto">Copy to another board</button>
     <button class="opt" data-a="copy">Copy link</button>
+    ${it.thumbnail_url ? "" : `<button class="opt" data-a="thumb">Retry preview image</button>`}
+    ${embedOf(it) ? "" : `<button class="opt" data-a="refresh">Refresh article text</button>`}
     <hr class="sep"><button class="opt danger" data-a="delete">Delete</button>`, async (a) => {
     if (a === "open") window.open(it.url, "_blank");
     if (a === "preview") openViewer(it.id);
+    if (a === "thumb") { toast("Looking for a preview…"); const { data, error } = await sb.functions.invoke("read", { body: { item_id: it.id, action: "thumbnail" } }); let msg = data?.error || error?.message; try { const j = await error?.context?.json(); if (j?.error) msg = j.error; } catch {} if (data?.ok) { it.thumbnail_url = data.thumbnail_url; if (it.status === "partial" && !/metadata:/.test(it.error || "")) it.status = "ready"; renderItems(); loadBoards(); toast(`Preview added (${data.via})`); } else toast(msg || "No preview found"); }
     if (a === "refresh") { readerCache.delete(it.id); if (viewer.id === it.id) { const b = $("#reader"); if (b) b.innerHTML = `<div class="loading">Refreshing…</div>`; loadReader(it, true); } else { toast("Will refetch on next open"); } }
     if (a === "copy") { await navigator.clipboard.writeText(it.url); toast("Link copied"); }
     if (a === "edit") editItem(it);
@@ -630,14 +632,22 @@ window.addEventListener("popstate", (e) => {
   if (e.state?.viewer && state.user) return openViewer(e.state.viewer, true);
   if (viewer.id) closeViewer(true);
 });
-function settingsSheet() {
+async function settingsSheet() {
   const m = openMode();
-  sheet(`<h2>Settings</h2><div class="lbl">Open cards</div>
+  const { count } = await sb.from("items").select("id", { count: "exact", head: true }).is("thumbnail_url", null).is("copied_from", null);
+  sheet(`<h2>Settings</h2>${count ? `<div class="lbl">Previews</div><button class="opt" data-a="thumbs">Retry ${plural(count)} without a preview<span class="hint">tries the page again, then a screenshot</span></button>` : ""}<div class="lbl">Open cards</div>
     <button class="opt ${m === "app" ? "current" : ""}" data-a="mode:app">In app<span class="hint">videos &amp; posts embed, articles as reader text</span></button>
     <button class="opt ${m === "browser" ? "current" : ""}" data-a="mode:browser">In browser<span class="hint">always leave the app</span></button>
     <hr class="sep"><button class="opt" data-a="signout">Sign out <span class="k">${esc(state.user?.email || "")}</span></button>`, async (a) => {
     if (a.startsWith("mode:")) { setOpenMode(a.slice(5)); toast(a.endsWith("app") ? "Cards open in app" : "Cards open in the browser"); }
     if (a === "signout") { await sb.auth.signOut(); location.hash = ""; }
+    if (a === "thumbs") {
+      toast("Retrying previews… this can take a minute");
+      const { data, error } = await sb.functions.invoke("read", { body: { action: "thumbnail-all", limit: 40 } });
+      if (error || !data) return toast(error?.message || "Retry failed");
+      toast(`Previews added: ${data.fixed} of ${data.checked}`);
+      route();   // reload whatever is on screen
+    }
   });
 }
 
