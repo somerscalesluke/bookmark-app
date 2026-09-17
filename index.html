@@ -121,7 +121,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:8px 0}
 .card.on{outline:3px solid var(--marker);outline-offset:-3px}
 .card.on .tick{background:var(--marker);border-color:var(--marker);color:#14181F}
 .card.on .tick::after{content:"";width:8px;height:13px;border:solid #14181F;border-width:0 3px 3px 0;transform:translateY(-2px) rotate(45deg)}
-.bulk{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 16px);transform:translateX(-50%);display:flex;align-items:center;gap:6px;background:var(--ink);color:var(--paper);padding:8px 8px 8px 16px;border-radius:999px;box-shadow:var(--shadow);z-index:15;max-width:calc(100% - 24px);white-space:nowrap;animation:pop .2s}
+.bulk{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 16px);transform:translateX(-50%);display:flex;align-items:center;gap:6px;background:var(--ink);color:var(--paper);padding:8px 8px 8px 16px;border-radius:24px;box-shadow:var(--shadow);z-index:15;max-width:calc(100% - 24px);flex-wrap:wrap;justify-content:center;white-space:nowrap;animation:pop .2s}
 .bulk .n{font:500 13px var(--mono);margin-right:6px}
 .bulk button{color:var(--paper);padding:8px 12px;border-radius:999px;font-weight:600;font-size:14px}
 .bulk button:hover{background:color-mix(in srgb,var(--paper) 15%,transparent)}
@@ -279,8 +279,9 @@ function toggleOne(id) { state.sel.has(id) ? state.sel.delete(id) : state.sel.ad
 function renderBulk() {
   $("#bulk")?.remove(); if (!state.selecting) return;
   const n = state.sel.size, all = visibleItems().length;
-  layer.insertAdjacentHTML("beforeend", `<div class="bulk" id="bulk"><span class="n">${n} of ${all}</span>
-    <button data-b="all">${n === all ? "None" : "All"}</button>${n ? `<button data-b="move">Move</button><button data-b="copy">Copy</button><button class="danger" data-b="delete">Delete</button>` : ""}<button class="x" data-b="x" aria-label="Done">✕</button></div>`);
+  const c = plural(n);
+  layer.insertAdjacentHTML("beforeend", `<div class="bulk" id="bulk"><span class="n">${n ? `${n} of ${all} selected` : `Tap cards to select (${all})`}</span>
+    <button data-b="all">${n === all ? "Select none" : "Select all"}</button>${n ? `<button data-b="move">Move ${c}</button><button data-b="copy">Copy ${c}</button><button class="danger" data-b="delete">Delete ${c}</button>` : ""}<button class="x" data-b="x" aria-label="Done">✕</button></div>`);
   $("#bulk").querySelectorAll("[data-b]").forEach((el) => el.onclick = () => bulkAction(el.dataset.b));
 }
 async function bulkAction(a) {
