@@ -1,4 +1,4 @@
-// bookmark-app — ingest edge function
+// bookmark-app — ingest edge function (v6)
 // POST /ingest  { url, mode?: "auto" | "board", board_id?, board_name?, note? }
 // Auth: x-api-key header (static key issued per user, hashed in public.api_keys)
 //
@@ -384,6 +384,45 @@ async function ensureBoard(userId: string, name: string, description: string, cr
   return { board: data as Board, created: true };
 }
 
+// ---------- board descriptions (v6) ----------
+// User-created boards start with no description, so the classifier under-picks them. Once a board holds
+// >= 3 cards, write a one-sentence description from what's actually on it. Runs in the background after a save.
+const DESCRIBE_MIN = Number(Deno.env.get("DESCRIBE_MIN_ITEMS") ?? "3");
+const DESC_SCHEMA = { name: "board_description", strict: true, schema: { type: "object", additionalProperties: false, properties: { description: { type: "string" } }, required: ["description"] } };
+async function describeBoard(userId: string, boardId: string, force = false): Promise<{ board: string; ok: boolean; description?: string; reason?: string }> {
+  const { data: b } = await db.from("boards").select("id,name,description,created_by").eq("id", boardId).eq("user_id", userId).maybeSingle();
+  if (!b) return { board: boardId, ok: false, reason: "not found" };
+  if (b.name === "Unsorted") return { board: b.name, ok: false, reason: "unsorted" };
+  if (b.description && !force) return { board: b.name, ok: false, reason: "has description" };
+  const { data: items } = await db.from("items").select("title,ai_summary,ai_tags,source").eq("board_id", boardId).order("created_at", { ascending: false }).limit(25);
+  if (!items || items.length < DESCRIBE_MIN) return { board: b.name, ok: false, reason: `only ${items?.length ?? 0} cards` };
+  if (!OPENAI_API_KEY) return { board: b.name, ok: false, reason: "OPENAI_API_KEY not set" };
+  const list = items.map((i: any) => `- ${i.title ?? "(untitled)"}${i.ai_summary ? ` — ${i.ai_summary}` : ""}${i.ai_tags?.length ? ` [${i.ai_tags.join(", ")}]` : ""}`).join("\n");
+  const system = `You write one-sentence descriptions of a person's bookmark boards so an automatic filer knows what belongs on each board.
+Rules: describe the TOPIC the cards share (what kinds of links belong here), not the format or platform; be specific enough to tell it apart from neighbouring topics; <= 25 words; no preamble, no quotes, no trailing period needed. Never mention people, brands or platforms unless the board is clearly about them.`;
+  const user = `BOARD NAME: ${b.name}\nCARDS ON IT:\n${list}`;
+  try {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST", headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: OPENAI_MODEL, messages: [{ role: "system", content: system }, { role: "user", content: user }], response_format: { type: "json_schema", json_schema: DESC_SCHEMA } }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const j = await r.json();
+    if (!r.ok) return { board: b.name, ok: false, reason: j.error?.message ?? `HTTP ${r.status}` };
+    const description = String(JSON.parse(j.choices?.[0]?.message?.content ?? "{}").description ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+    if (!description) return { board: b.name, ok: false, reason: "empty completion" };
+    const { error } = await db.from("boards").update({ description }).eq("id", boardId);
+    if (error) return { board: b.name, ok: false, reason: error.message };
+    return { board: b.name, ok: true, description };
+  } catch (e) { return { board: b.name, ok: false, reason: String(e) }; }
+}
+// Run after the response is sent when the runtime allows it; otherwise fire-and-forget.
+function background(p: Promise<unknown>) {
+  // deno-lint-ignore no-explicit-any
+  const rt = (globalThis as any).EdgeRuntime;
+  if (rt?.waitUntil) rt.waitUntil(p.catch(() => {})); else p.catch(() => {});
+}
+
 // ---------- frameability (v1.3 batch 2) ----------
 // Can the viewer show this page inside an <iframe>? Decided from response headers only:
 // X-Frame-Options DENY/SAMEORIGIN or a CSP frame-ancestors that excludes the viewer origin -> false.
@@ -462,6 +501,14 @@ Deno.serve(async (req) => {
       }));
     }
     return json({ checked: out.length, embeddable: out.filter((o) => o.embeddable).length, results: out });
+  }
+  // One-off / maintenance: describe every board of the caller that has none yet (or all with ?force=1).
+  if (req.method === "GET" && reqUrl.searchParams.get("diag") === "describe-boards") {
+    const force = reqUrl.searchParams.get("force") === "1";
+    const { data: bs } = await db.from("boards").select("id,name,description").eq("user_id", userId).neq("name", "Unsorted");
+    const out = [];
+    for (const b of bs ?? []) { if (b.description && !force) { out.push({ board: b.name, ok: false, reason: "has description" }); continue; } out.push(await describeBoard(userId, b.id, force)); }
+    return json({ boards: out.length, described: out.filter((o) => o.ok).length, results: out });
   }
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
@@ -543,6 +590,8 @@ Deno.serve(async (req) => {
   };
   const { error: insErr } = await db.from("items").insert(row);
   if (insErr) return json({ error: `insert failed: ${insErr.message}` }, 500);
+  // 8. board without a description (user-created, or an old AI board) -> write one in the background once it has enough cards
+  if (!board.description && board.name !== "Unsorted") background(describeBoard(userId, board.id));
 
   return json({
     ok: true, item_id: itemId, title: row.title, thumbnail_url: thumb, source: canon.source, canonical_url: canon.url,
