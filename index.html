@@ -40,6 +40,8 @@ header{display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset
 
 main{padding:8px var(--gutter) calc(env(safe-area-inset-bottom) + 48px);max-width:1400px;margin:0 auto}
 .eyebrow{font:500 12px/1 var(--mono);color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin:18px 0 14px}
+.eyebrow.row{display:flex;align-items:center;gap:10px;margin-top:12px}
+.eyebrow.row .chip{margin-left:auto;text-transform:none;letter-spacing:.03em}
 h1{font:700 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-.025em}
 .mark{position:relative;display:inline-block}
 .mark::after{content:"";position:absolute;left:-.1em;right:-.1em;bottom:.08em;height:.38em;background:var(--marker);z-index:-1;transform:rotate(-1.2deg);border-radius:2px}
@@ -67,8 +69,8 @@ h1{font:700 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-.025em}
 .back{font:500 13px var(--mono);color:var(--muted);letter-spacing:.04em}
 .back:hover{color:var(--ink)}
 .boardhead .count{font:500 13px var(--mono);color:var(--muted)}
-.boardhead .actions{margin-left:auto;display:flex;gap:4px}
-.chip{font:500 12px var(--mono);letter-spacing:.03em;padding:7px 11px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:var(--surface)}
+.boardhead .actions{margin-left:auto;display:flex;flex-wrap:wrap;gap:4px}
+.chip{font:500 12px var(--mono);letter-spacing:.03em;padding:7px 11px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:var(--surface);white-space:nowrap}
 .chip:hover{color:var(--ink);border-color:var(--ink)}
 .chip.danger:hover{color:var(--danger);border-color:var(--danger)}
 
@@ -102,6 +104,8 @@ h1{font:700 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-.025em}
 .opt.danger{color:var(--danger)}
 .opt.current{font-weight:600}
 .opt.current::after{content:"current";font:500 10px var(--mono);background:var(--marker);color:#14181F;padding:2px 6px;border-radius:4px;margin-left:auto}
+.opt.current[data-dir]::after{content:attr(data-dir)}
+.opt .hint{font-size:12px;color:var(--muted);margin-left:6px}
 .field{display:flex;gap:8px;margin:6px 4px 10px}
 .field input{flex:1;border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:11px 12px;outline:0}
 .field input:focus{border-color:var(--ink)}
@@ -155,9 +159,61 @@ const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const state = { user: null, boards: [], items: [], board: null, q: "", selecting: false, sel: new Set() };
+const state = { user: null, boards: [], items: [], board: null, q: "", selecting: false, sel: new Set(), sort: { cards: null, boards: null } };
 const plural = (n, w = "card") => `${n} ${w}${n === 1 ? "" : "s"}`;
 const main = $("#main"), layer = $("#layer");
+
+// ---------- sorting ----------
+// key → { label (sheet), chip (short), hint, dir (default), cmp(a,b) ascending, only ("all" = Everything view only) }
+const ts = (v) => (v ? Date.parse(v) || 0 : 0);
+const titleOf = (i) => (i.title || hostOf(i.url) || "").trim();
+const byText = (a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+const SORTS = {
+  cards: {
+    added:    { label: "Date added",    chip: "added",    dir: "desc", cmp: (a, b) => ts(a.created_at) - ts(b.created_at) },
+    modified: { label: "Date modified", chip: "modified", dir: "desc", cmp: (a, b) => (ts(a.updated_at || a.created_at) - ts(b.updated_at || b.created_at)) || (ts(a.created_at) - ts(b.created_at)) },
+    title:    { label: "Title",         chip: "title",    dir: "asc",  cmp: (a, b) => byText(titleOf(a), titleOf(b)) },
+    source:   { label: "Source",        chip: "source",   dir: "asc",  hint: "instagram, tiktok, article…", cmp: (a, b) => byText(srcOf(a), srcOf(b)) || ts(b.created_at) - ts(a.created_at) },
+    board:    { label: "Board",         chip: "board",    dir: "asc",  only: "all", cmp: (a, b) => byText(boardName(a.board_id), boardName(b.board_id)) || ts(b.created_at) - ts(a.created_at) },
+  },
+  boards: {
+    size:    { label: "Number of cards", chip: "size",    dir: "desc", cmp: (a, b) => (a.item_count - b.item_count) || byText(b.name, a.name) },
+    saved:   { label: "Last saved to",   chip: "saved",   dir: "desc", cmp: (a, b) => (ts(a.last_saved_at) - ts(b.last_saved_at)) || (ts(a.created_at) - ts(b.created_at)) },
+    name:    { label: "Name",            chip: "name",    dir: "asc",  cmp: (a, b) => byText(a.name, b.name) },
+    created: { label: "Date created",    chip: "created", dir: "desc", cmp: (a, b) => ts(a.created_at) - ts(b.created_at) },
+  },
+};
+const DEFAULT_SORT = { cards: { key: "added", dir: "desc" }, boards: { key: "size", dir: "desc" } };
+function getSort(kind) {
+  if (!state.sort[kind]) {
+    let s = null; try { s = JSON.parse(localStorage.getItem("sort." + kind) || "null"); } catch {}
+    state.sort[kind] = s && SORTS[kind][s.key] && ["asc", "desc"].includes(s.dir) ? s : { ...DEFAULT_SORT[kind] };
+  }
+  const s = state.sort[kind];
+  // "board" only makes sense on Everything; fall back silently elsewhere
+  if (kind === "cards" && SORTS.cards[s.key].only === "all" && state.board) return DEFAULT_SORT.cards;
+  return s;
+}
+function setSort(kind, key) {
+  const cur = getSort(kind), def = SORTS[kind][key];
+  const next = cur.key === key ? { key, dir: cur.dir === "asc" ? "desc" : "asc" } : { key, dir: def.dir };
+  state.sort[kind] = next;
+  try { localStorage.setItem("sort." + kind, JSON.stringify(next)); } catch {}
+  return next;
+}
+function sortList(kind, list) {
+  const s = getSort(kind), def = SORTS[kind][s.key], sign = s.dir === "asc" ? 1 : -1;
+  return [...list].sort((a, b) => sign * def.cmp(a, b));
+}
+const sortChipLabel = (kind) => { const s = getSort(kind); return `${SORTS[kind][s.key].chip} ${s.dir === "asc" ? "↑" : "↓"}`; };
+function sortSheet(kind, onChange) {
+  const cur = getSort(kind);
+  const opts = Object.entries(SORTS[kind]).filter(([, d]) => !(kind === "cards" && d.only === "all" && state.board)).map(([k, d]) => {
+    const on = cur.key === k;
+    return `<button class="opt ${on ? "current" : ""}" data-a="s:${k}" ${on ? `data-dir="${cur.dir === "asc" ? "↑ ascending" : "↓ descending"}"` : ""}>${esc(d.label)}${d.hint ? `<span class="hint">${esc(d.hint)}</span>` : ""}</button>`;
+  }).join("");
+  sheet(`<h2>Sort ${kind}</h2><div class="sub">Tap the current one again to flip the direction.</div>${opts}`, (a) => { if (a.startsWith("s:")) { setSort(kind, a.slice(2)); onChange(); } });
+}
 
 // ---------- auth ----------
 async function boot() {
@@ -190,7 +246,7 @@ async function loadBoards() {
   state.boards = (data ?? []).sort((a, b) => (a.name === "Unsorted") - (b.name === "Unsorted") || b.item_count - a.item_count || a.name.localeCompare(b.name));
 }
 async function loadItems(boardId) {
-  let qy = sb.from("items").select("id,board_id,url,canonical_url,source,title,description,author,site_name,thumbnail_url,original_thumbnail_url,ai_summary,ai_tags,ai_confidence,status,created_at,blurb,copied_from").order("created_at", { ascending: false }).limit(600);
+  let qy = sb.from("items").select("id,board_id,url,canonical_url,source,title,description,author,site_name,thumbnail_url,original_thumbnail_url,ai_summary,ai_tags,ai_confidence,status,created_at,updated_at,blurb,copied_from").order("created_at", { ascending: false }).limit(600);
   if (boardId) qy = qy.eq("board_id", boardId);
   const { data, error } = await qy;
   if (error) return toast(error.message);
@@ -218,11 +274,14 @@ async function renderHome() {
   await loadBoards();
   const total = state.boards.reduce((n, b) => n + b.item_count, 0);
   if (!total) { main.innerHTML = `<div class="empty"><b>Nothing saved yet</b>Share a link from any app to "Save to Bookmarks" and it will show up here.</div>`; return; }
-  main.innerHTML = `<div class="eyebrow">${plural(total)} · ${state.boards.filter(b => b.item_count).length} boards</div>
+  const shown = state.boards.filter(b => b.item_count || (b.created_by === "user" && b.name !== "Unsorted"));
+  const sorted = [...sortList("boards", shown.filter(b => b.name !== "Unsorted")), ...shown.filter(b => b.name === "Unsorted")];
+  main.innerHTML = `<div class="eyebrow row"><span>${plural(total)} · ${state.boards.filter(b => b.item_count).length} boards</span><button class="chip" id="sortBoards" title="Sort boards">${sortChipLabel("boards")}</button></div>
   <div class="boards">
     <a class="stack" href="#all"><div class="pile">${pile(state.boards.map(b => (b.cover_thumbnails ?? [])[0]).filter(Boolean).slice(0, 4), "All")}</div><div><div class="name">Everything</div><div class="count">${plural(total)}</div></div></a>
-    ${state.boards.filter(b => b.item_count || (b.created_by === "user" && b.name !== "Unsorted")).map(b => `<a class="stack ${b.name === "Unsorted" && b.item_count ? "unsorted" : ""}" href="#${b.id}"><div class="pile">${pile(b.cover_thumbnails ?? [], b.name)}</div><div><div class="name">${esc(b.name)}</div><div class="count">${plural(b.item_count)}</div></div></a>`).join("")}
+    ${sorted.map(b => `<a class="stack ${b.name === "Unsorted" && b.item_count ? "unsorted" : ""}" href="#${b.id}"><div class="pile">${pile(b.cover_thumbnails ?? [], b.name)}</div><div><div class="name">${esc(b.name)}</div><div class="count">${plural(b.item_count)}</div></div></a>`).join("")}
   </div>`;
+  $("#sortBoards").onclick = () => sortSheet("boards", renderHome);
 }
 function pile(thumbs, name) {
   const t = thumbs.filter(Boolean).slice(0, 4).reverse();
@@ -240,15 +299,20 @@ async function renderBoard(boardId) {
     <a class="back" href="#">← boards</a>
     <h1><span class="mark">${esc(b ? b.name : "Everything")}</span></h1>
     <span class="count" id="count"></span>
-    <div class="actions"><button class="chip" data-act="select">select</button>${b ? `<button class="chip" data-act="rename">rename</button><button class="chip" data-act="merge">merge into…</button>${b.name !== "Unsorted" ? `<button class="chip danger" data-act="delete">delete</button>` : ""}` : ""}</div>
+    <div class="actions"><button class="chip" data-act="sort" id="sortCards" title="Sort cards">${sortChipLabel("cards")}</button><button class="chip" data-act="select">select</button>${b ? `<button class="chip" data-act="rename">rename</button><button class="chip" data-act="merge">merge into…</button>${b.name !== "Unsorted" ? `<button class="chip danger" data-act="delete">delete</button>` : ""}` : ""}</div>
   </div><div class="grid" id="grid"></div>`;
-  main.querySelectorAll("[data-act]").forEach((el) => el.onclick = () => el.dataset.act === "select" ? toggleSelect() : boardAction(el.dataset.act, b));
+  main.querySelectorAll("[data-act]").forEach((el) => el.onclick = () => {
+    if (el.dataset.act === "select") return toggleSelect();
+    if (el.dataset.act === "sort") return sortSheet("cards", () => { $("#sortCards").textContent = sortChipLabel("cards"); renderItems(); });
+    boardAction(el.dataset.act, b);
+  });
   await loadItems(boardId);
   renderItems();
 }
 function visibleItems() {
   const q = state.q;
-  return q ? state.items.filter((i) => [i.title, i.blurb, i.ai_summary, i.author, i.site_name, ...(i.ai_tags || [])].join(" ").toLowerCase().includes(q)) : state.items;
+  const list = q ? state.items.filter((i) => [i.title, i.blurb, i.ai_summary, i.author, i.site_name, ...(i.ai_tags || [])].join(" ").toLowerCase().includes(q)) : state.items;
+  return sortList("cards", list);
 }
 function renderItems() {
   const grid = $("#grid"); if (!grid) return;
@@ -270,6 +334,7 @@ function renderItems() {
   renderBulk();
 }
 const hostOf = (u) => { try { return new URL(u).hostname; } catch { return ""; } };
+const srcOf = (i) => i.source === "article" ? "article " + hostOf(i.url).replace(/^www\./, "") : (i.source || "");
 
 // ---------- selection mode ----------
 function toggleSelect() { state.selecting ? exitSelect() : enterSelect(); }
@@ -304,7 +369,8 @@ function pickBoard(title, onPick, excludeBoardId) {
 async function moveMany(ids, boardId) {
   const { error } = await sb.from("items").update({ board_id: boardId, filed_by: "user" }).in("id", ids); if (error) return toast(error.message);
   const name = boardName(boardId);
-  state.items.forEach((i) => { if (ids.includes(i.id)) i.board_id = boardId; });
+  const now = new Date().toISOString();
+  state.items.forEach((i) => { if (ids.includes(i.id)) { i.board_id = boardId; i.updated_at = now; } });
   if (state.board) state.items = state.items.filter((i) => i.board_id === state.board);
   loadBoards(); closeSheet(); exitSelect(); renderItems(); toast(`Moved ${plural(ids.length)} to ${name}`);
 }
@@ -342,7 +408,7 @@ function editItem(it) {
     <div class="field" style="justify-content:flex-end"><button type="button" class="btn ghost" id="ecancel">Cancel</button><button class="btn">Save</button></div></form>`, () => {}, async (form) => {
     const title = $("#et", form).value.trim(), blurb = $("#ed", form).value.trim();
     const { error } = await sb.from("items").update({ title: title || it.title, blurb: blurb || null }).eq("id", it.id); if (error) return toast(error.message);
-    it.title = title || it.title; it.blurb = blurb || null; closeSheet(); renderItems(); toast("Saved");
+    it.title = title || it.title; it.blurb = blurb || null; it.updated_at = new Date().toISOString(); closeSheet(); renderItems(); toast("Saved");
   });
   $("#ecancel").onclick = closeSheet;
 }
