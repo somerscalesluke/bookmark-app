@@ -32,16 +32,24 @@ a{color:inherit;text-decoration:none}
 header{display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 14px) var(--gutter) 10px;position:sticky;top:0;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(14px);z-index:5}
 .brand{font:700 26px/1 var(--display);letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
 .brand i{display:inline-block;width:22px;height:9px;background:var(--marker);transform:rotate(-6deg);border-radius:2px}
-.search{flex:1;max-width:420px;margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 14px}
+.search{flex:1;min-width:0;max-width:420px;margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 14px}
 .search input{flex:1;border:0;background:none;outline:0;min-width:0}
 .search input::placeholder{color:var(--muted)}
-.iconbtn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.iconbtn{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
 .iconbtn:hover{background:var(--surface);color:var(--ink)}
 
 main{padding:8px var(--gutter) calc(env(safe-area-inset-bottom) + 48px);max-width:1400px;margin:0 auto}
 .eyebrow{font:500 12px/1 var(--mono);color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin:18px 0 14px}
 .eyebrow.row{display:flex;align-items:center;gap:10px;margin-top:12px}
-.eyebrow.row .chip{margin-left:auto;text-transform:none;letter-spacing:.03em}
+.eyebrow.row .sortctl{margin-left:auto;text-transform:none;letter-spacing:.03em}
+/* sort control: [caret][key] */
+.sortctl{display:inline-flex;align-items:stretch}
+.sortctl .chip{border-radius:0}
+.sortctl .caret{border-radius:999px 0 0 999px;padding:7px 7px 7px 10px;display:grid;place-items:center}
+.sortctl .caret svg{transition:transform .18s}
+.sortctl .caret.up svg{transform:rotate(180deg)}
+.sortctl .key{border-radius:0 999px 999px 0;border-left:0}
+.sortctl .chip:hover + .chip{border-left-color:var(--line)}
 h1{font:700 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-.025em}
 .mark{position:relative;display:inline-block}
 .mark::after{content:"";position:absolute;left:-.1em;right:-.1em;bottom:.08em;height:.38em;background:var(--marker);z-index:-1;transform:rotate(-1.2deg);border-radius:2px}
@@ -104,7 +112,6 @@ h1{font:700 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-.025em}
 .opt.danger{color:var(--danger)}
 .opt.current{font-weight:600}
 .opt.current::after{content:"current";font:500 10px var(--mono);background:var(--marker);color:#14181F;padding:2px 6px;border-radius:4px;margin-left:auto}
-.opt.current[data-dir]::after{content:attr(data-dir)}
 .opt .hint{font-size:12px;color:var(--muted);margin-left:6px}
 .field{display:flex;gap:8px;margin:6px 4px 10px}
 .field input{flex:1;border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:11px 12px;outline:0}
@@ -194,25 +201,34 @@ function getSort(kind) {
   if (kind === "cards" && SORTS.cards[s.key].only === "all" && state.board) return DEFAULT_SORT.cards;
   return s;
 }
-function setSort(kind, key) {
-  const cur = getSort(kind), def = SORTS[kind][key];
-  const next = cur.key === key ? { key, dir: cur.dir === "asc" ? "desc" : "asc" } : { key, dir: def.dir };
-  state.sort[kind] = next;
-  try { localStorage.setItem("sort." + kind, JSON.stringify(next)); } catch {}
-  return next;
-}
+function saveSort(kind, next) { state.sort[kind] = next; try { localStorage.setItem("sort." + kind, JSON.stringify(next)); } catch {} return next; }
+const setSortKey = (kind, key) => saveSort(kind, { key, dir: SORTS[kind][key].dir });   // picking a key resets to that key's natural direction
+const flipSort = (kind) => { const s = getSort(kind); return saveSort(kind, { key: s.key, dir: s.dir === "asc" ? "desc" : "asc" }); };
 function sortList(kind, list) {
   const s = getSort(kind), def = SORTS[kind][s.key], sign = s.dir === "asc" ? 1 : -1;
   return [...list].sort((a, b) => sign * def.cmp(a, b));
 }
-const sortChipLabel = (kind) => { const s = getSort(kind); return `${SORTS[kind][s.key].chip} ${s.dir === "asc" ? "↑" : "↓"}`; };
+// [caret][key] control. Caret toggles asc/desc; key opens the picker.
+function sortControl(kind) {
+  const s = getSort(kind), asc = s.dir === "asc";
+  return `<span class="sortctl" data-sort="${kind}"><button class="chip caret ${asc ? "up" : ""}" data-flip title="${asc ? "Ascending — tap for descending" : "Descending — tap for ascending"}" aria-label="Sort direction: ${asc ? "ascending" : "descending"}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><button class="chip key" data-pick title="Sort ${kind} by…">${SORTS[kind][s.key].chip}</button></span>`;
+}
+function refreshSortControl(kind) {
+  const el = main.querySelector(`.sortctl[data-sort="${kind}"]`); if (!el) return;
+  const s = getSort(kind), asc = s.dir === "asc", c = el.querySelector(".caret");
+  c.classList.toggle("up", asc); c.title = asc ? "Ascending — tap for descending" : "Descending — tap for ascending"; c.setAttribute("aria-label", `Sort direction: ${asc ? "ascending" : "descending"}`);
+  el.querySelector(".key").textContent = SORTS[kind][s.key].chip;
+}
+function bindSortControl(kind, onChange) {
+  const el = main.querySelector(`.sortctl[data-sort="${kind}"]`); if (!el) return;
+  el.querySelector("[data-flip]").onclick = () => { flipSort(kind); refreshSortControl(kind); onChange(); };
+  el.querySelector("[data-pick]").onclick = () => sortSheet(kind, () => { refreshSortControl(kind); onChange(); });
+}
 function sortSheet(kind, onChange) {
   const cur = getSort(kind);
-  const opts = Object.entries(SORTS[kind]).filter(([, d]) => !(kind === "cards" && d.only === "all" && state.board)).map(([k, d]) => {
-    const on = cur.key === k;
-    return `<button class="opt ${on ? "current" : ""}" data-a="s:${k}" ${on ? `data-dir="${cur.dir === "asc" ? "↑ ascending" : "↓ descending"}"` : ""}>${esc(d.label)}${d.hint ? `<span class="hint">${esc(d.hint)}</span>` : ""}</button>`;
-  }).join("");
-  sheet(`<h2>Sort ${kind}</h2><div class="sub">Tap the current one again to flip the direction.</div>${opts}`, (a) => { if (a.startsWith("s:")) { setSort(kind, a.slice(2)); onChange(); } });
+  const opts = Object.entries(SORTS[kind]).filter(([, d]) => !(kind === "cards" && d.only === "all" && state.board)).map(([k, d]) =>
+    `<button class="opt ${cur.key === k ? "current" : ""}" data-a="s:${k}">${esc(d.label)}${d.hint ? `<span class="hint">${esc(d.hint)}</span>` : ""}</button>`).join("");
+  sheet(`<h2>Sort ${kind} by</h2>${opts}`, (a) => { if (a.startsWith("s:")) { setSortKey(kind, a.slice(2)); onChange(); } });
 }
 
 // ---------- auth ----------
@@ -276,12 +292,12 @@ async function renderHome() {
   if (!total) { main.innerHTML = `<div class="empty"><b>Nothing saved yet</b>Share a link from any app to "Save to Bookmarks" and it will show up here.</div>`; return; }
   const shown = state.boards.filter(b => b.item_count || (b.created_by === "user" && b.name !== "Unsorted"));
   const sorted = [...sortList("boards", shown.filter(b => b.name !== "Unsorted")), ...shown.filter(b => b.name === "Unsorted")];
-  main.innerHTML = `<div class="eyebrow row"><span>${plural(total)} · ${state.boards.filter(b => b.item_count).length} boards</span><button class="chip" id="sortBoards" title="Sort boards">${sortChipLabel("boards")}</button></div>
+  main.innerHTML = `<div class="eyebrow row"><span>${plural(total)} · ${state.boards.filter(b => b.item_count).length} boards</span>${sortControl("boards")}</div>
   <div class="boards">
     <a class="stack" href="#all"><div class="pile">${pile(state.boards.map(b => (b.cover_thumbnails ?? [])[0]).filter(Boolean).slice(0, 4), "All")}</div><div><div class="name">Everything</div><div class="count">${plural(total)}</div></div></a>
     ${sorted.map(b => `<a class="stack ${b.name === "Unsorted" && b.item_count ? "unsorted" : ""}" href="#${b.id}"><div class="pile">${pile(b.cover_thumbnails ?? [], b.name)}</div><div><div class="name">${esc(b.name)}</div><div class="count">${plural(b.item_count)}</div></div></a>`).join("")}
   </div>`;
-  $("#sortBoards").onclick = () => sortSheet("boards", renderHome);
+  bindSortControl("boards", renderHome);
 }
 function pile(thumbs, name) {
   const t = thumbs.filter(Boolean).slice(0, 4).reverse();
@@ -299,13 +315,10 @@ async function renderBoard(boardId) {
     <a class="back" href="#">← boards</a>
     <h1><span class="mark">${esc(b ? b.name : "Everything")}</span></h1>
     <span class="count" id="count"></span>
-    <div class="actions"><button class="chip" data-act="sort" id="sortCards" title="Sort cards">${sortChipLabel("cards")}</button><button class="chip" data-act="select">select</button>${b ? `<button class="chip" data-act="rename">rename</button><button class="chip" data-act="merge">merge into…</button>${b.name !== "Unsorted" ? `<button class="chip danger" data-act="delete">delete</button>` : ""}` : ""}</div>
+    <div class="actions">${sortControl("cards")}<button class="chip" data-act="select">select</button>${b ? `<button class="chip" data-act="rename">rename</button><button class="chip" data-act="merge">merge into…</button>${b.name !== "Unsorted" ? `<button class="chip danger" data-act="delete">delete</button>` : ""}` : ""}</div>
   </div><div class="grid" id="grid"></div>`;
-  main.querySelectorAll("[data-act]").forEach((el) => el.onclick = () => {
-    if (el.dataset.act === "select") return toggleSelect();
-    if (el.dataset.act === "sort") return sortSheet("cards", () => { $("#sortCards").textContent = sortChipLabel("cards"); renderItems(); });
-    boardAction(el.dataset.act, b);
-  });
+  main.querySelectorAll("[data-act]").forEach((el) => el.onclick = () => el.dataset.act === "select" ? toggleSelect() : boardAction(el.dataset.act, b));
+  bindSortControl("cards", renderItems);
   await loadItems(boardId);
   renderItems();
 }
