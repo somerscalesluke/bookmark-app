@@ -70,19 +70,20 @@ async function jinaImages(url: string): Promise<string[]> {
 }
 async function microlinkScreenshot(url: string): Promise<string | null> {
   try {
-    const r = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&viewport.width=1200&viewport.height=900`, { headers: MICROLINK_KEY ? { "x-api-key": MICROLINK_KEY } : {}, signal: AbortSignal.timeout(25000) });
+    // 1x JPEG keeps tiles light (a 2x PNG of a long page came back at 2 MB)
+    const r = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&viewport.width=1200&viewport.height=900&viewport.deviceScaleFactor=1&screenshot.type=jpeg&screenshot.quality=80`, { headers: MICROLINK_KEY ? { "x-api-key": MICROLINK_KEY } : {}, signal: AbortSignal.timeout(25000) });
     const j = await r.json();
     return j?.status === "success" ? (j.data?.screenshot?.url ?? null) : null;
   } catch { return null; }
 }
-async function rehost(userId: string, itemId: string, src: string, referer: string): Promise<string | null> {
+async function rehost(userId: string, itemId: string, src: string, referer: string, minBytes = 8000): Promise<string | null> {
   try {
     const r = await fetch(src, { headers: { "User-Agent": BROWSER_UA, Referer: referer, Accept: "image/*,*/*;q=0.8" }, redirect: "follow", signal: AbortSignal.timeout(12000) });
     if (!r.ok) return null;
     const ct = (r.headers.get("content-type") ?? "").split(";")[0].trim();
     if (!ct.startsWith("image/") || ct === "image/svg+xml") return null;
     const bytes = new Uint8Array(await r.arrayBuffer());
-    if (bytes.length < 2000 || bytes.length > 10 * 1024 * 1024) return null;   // < 2 KB is a tracking pixel or a broken icon
+    if (bytes.length < minBytes || bytes.length > 10 * 1024 * 1024) return null;   // tiny = tracking pixel, profile pic, or a blank bot-wall screenshot
     const ext = ct === "image/png" ? "png" : ct === "image/webp" ? "webp" : ct === "image/gif" ? "gif" : ct === "image/avif" ? "avif" : "jpg";
     const path = `${userId}/${itemId}.${ext}`;
     const { error } = await db.storage.from("thumbs").upload(path, bytes, { contentType: ct, upsert: true });
@@ -99,8 +100,11 @@ async function retryThumbnail(userId: string, it: any): Promise<{ ok: boolean; t
     const hosted = await rehost(userId, it.id, c.src, page);
     if (hosted) return await save(hosted, c.src, c.via);
   }
-  const shot = await microlinkScreenshot(page);
-  if (shot) { const hosted = await rehost(userId, it.id, shot, page); if (hosted) return await save(hosted, shot, "screenshot"); }
+  // Instagram's own page is a login wall; its embed page renders the post without one.
+  const ig = page.match(/instagram\.com\/(?:[^/]+\/)?(?:p|reel|reels|tv)\/([\w-]+)/);
+  const shot = await microlinkScreenshot(ig ? `https://www.instagram.com/p/${ig[1]}/embed/captioned/` : page);
+  // Bot-walled pages screenshot as a blank ~17 KB image; a real page is 100 KB+.
+  if (shot) { const hosted = await rehost(userId, it.id, shot, page, 60000); if (hosted) return await save(hosted, shot, "screenshot"); }
   return { ok: false, error: `no usable image (${candidates.length} candidates${shot === null ? ", screenshot unavailable" : ""})` };
 
   async function save(hosted: string, original: string, via: string) {
