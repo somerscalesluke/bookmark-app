@@ -92,7 +92,8 @@ h1{font:700 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-.025em}
 .card .title{font:600 14px/1.3 var(--body);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .card .meta{display:flex;align-items:center;gap:8px;margin-top:8px;font:500 11px var(--mono);color:var(--muted);letter-spacing:.03em;min-width:0}
 .card .meta .src{color:var(--ink);background:var(--paper);padding:2px 6px;border-radius:4px;text-transform:uppercase}
-.card .meta span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .meta .who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.card .meta .when{margin-left:auto;white-space:nowrap;flex:none;opacity:.85}
 .card .more{position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;background:color-mix(in srgb,var(--surface) 85%,transparent);backdrop-filter:blur(6px);display:grid;place-items:center;color:var(--ink);opacity:0;transition:opacity .15s;box-shadow:var(--shadow)}
 .card:hover .more,.card:focus-within .more{opacity:1}
 @media (hover:none){.card .more{opacity:1}}
@@ -376,7 +377,7 @@ function renderItems() {
       ${i.thumbnail_url ? `<img src="${esc(i.thumbnail_url)}" alt="" loading="lazy">` : `<div class="ph">${esc((i.site_name || hostOf(i.url)).slice(0, 1).toUpperCase())}</div>`}
       <div class="body"><div class="title">${esc(i.title || hostOf(i.url))}</div>
       ${(i.blurb || i.ai_summary) ? `<div class="summary">${esc(i.blurb || i.ai_summary)}</div>` : ""}
-      <div class="meta"><span class="src">${esc(i.source === "article" ? hostOf(i.url).replace(/^www\./, "").split(".")[0] : i.source)}</span><span>${esc(i.author || i.site_name || "")}</span></div></div>
+      <div class="meta"><span class="src">${esc(i.source === "article" ? hostOf(i.url).replace(/^www\./, "").split(".")[0] : i.source)}</span><span class="who">${esc(i.author || i.site_name || "")}</span><time class="when" datetime="${esc(i.created_at || "")}" title="Added ${esc(fmtDate(i.created_at, true))}">${esc(fmtDate(i.created_at))}</time></div></div>
     </a>
     <span class="tick" aria-hidden="true"></span>
     <button class="more" aria-label="More" data-more="${i.id}"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
@@ -389,6 +390,8 @@ function renderItems() {
   renderBulk();
 }
 const hostOf = (u) => { try { return new URL(u).hostname; } catch { return ""; } };
+// "Sep 17" this year, "Sep 17, 2025" otherwise; long form adds the year always.
+function fmtDate(iso, long) { const d = new Date(iso); if (!iso || isNaN(d)) return ""; const now = new Date(); const opts = { month: "short", day: "numeric" }; if (long || d.getFullYear() !== now.getFullYear()) opts.year = "numeric"; return d.toLocaleDateString(undefined, opts); }
 const srcOf = (i) => i.source === "article" ? "article " + hostOf(i.url).replace(/^www\./, "") : (i.source || "");
 
 // ---------- selection mode ----------
@@ -444,6 +447,7 @@ function itemMenu(id) {
   const cur = state.boards.find((b) => b.id === it.board_id);
   sheet(`<h2>${esc(it.title || hostOf(it.url))}</h2><div class="sub">${cur ? "In " + esc(cur.name) : ""}${it.copied_from ? " · copy" : ""}</div>
     <button class="opt" data-a="preview">${embedOf(it) ? "Preview in app" : "Read in app"}</button>
+    ${embedOf(it) ? "" : `<button class="opt" data-a="refresh">Refresh article text</button>`}
     <button class="opt" data-a="open">Open in browser <span class="k">${esc(hostOf(it.url))}</span></button>
     <button class="opt" data-a="edit">Edit title & description</button>
     <button class="opt" data-a="move">Move to another board</button>
@@ -452,6 +456,7 @@ function itemMenu(id) {
     <hr class="sep"><button class="opt danger" data-a="delete">Delete</button>`, async (a) => {
     if (a === "open") window.open(it.url, "_blank");
     if (a === "preview") openViewer(it.id);
+    if (a === "refresh") { readerCache.delete(it.id); if (viewer.id === it.id) { const b = $("#reader"); if (b) b.innerHTML = `<div class="loading">Refreshing…</div>`; loadReader(it, true); } else { toast("Will refetch on next open"); } }
     if (a === "copy") { await navigator.clipboard.writeText(it.url); toast("Link copied"); }
     if (a === "edit") editItem(it);
     if (a === "move") pickBoard("Move to", (b) => moveMany([it.id], b), it.board_id);
@@ -549,11 +554,11 @@ function openViewer(id, fromHistory) {
 }
 // ---------- reader mode ----------
 const readerCache = new Map();   // item id -> {title, markdown} for this session
-async function loadReader(it) {
+async function loadReader(it, refresh) {
   const box = $("#reader"); if (!box) return;
-  let r = readerCache.get(it.id);
+  let r = refresh ? null : readerCache.get(it.id);
   if (!r) {
-    const { data, error } = await sb.functions.invoke("read", { body: { item_id: it.id } });
+    const { data, error } = await sb.functions.invoke("read", { body: { item_id: it.id, refresh: !!refresh } });
     if (viewer.id !== it.id) return;                       // user moved on while we were fetching
     if (error || !data?.markdown) {
       let msg = data?.error || error?.message || "Couldn't fetch the article text";
@@ -565,9 +570,25 @@ async function loadReader(it) {
   }
   const host = hostOf(it.url).replace(/^www\./, "");
   const heading = /^\s*#\s/.test(r.markdown) ? "" : `<h1>${esc(r.title || it.title || host)}</h1>`;
-  box.innerHTML = `<div class="src">${esc(host)}${r.stale ? " · cached copy" : ""}</div>${heading}${md(r.markdown)}`;
+  box.innerHTML = `<div class="src">${esc(host)}${r.stale ? " · cached copy" : ""}</div>${heading}${md(tidyReader(r.markdown))}`;
   box.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
   box.parentElement.scrollTop = 0;
+}
+// Drop the navigation crumbs Jina leaves before the article starts ("Site search", bylines, "Share", "Advertisement"...):
+// short plain lines before the first real paragraph, plus a few known junk lines anywhere. Headings, images, lists and quotes are kept.
+const JUNK_LINE = /^(advertisement|ad(vert)?|share( this)?|save|menu|skip to( main)? content|sign in|log ?in|subscribe( now)?|search|site search|close|open menu|getty images|image source[,:]?.*|image caption[,:]?.*|loading\.{3}|\d+ (min|minute)s? read|[\d,.]+[km]? (views|likes|comments))$/i;
+function tidyReader(src) {
+  const lines = src.replace(/\r/g, "").split("\n"); const out = []; let started = false, prev = "";
+  for (const raw of lines) {
+    const line = raw.trim();
+    const structural = /^(#{1,6}\s|!\[|[-*+]\s|\d+[.)]\s|>\s?|```)/.test(line);
+    if (line && !structural && JUNK_LINE.test(line)) continue;
+    if (line && line === prev) continue;                              // repeated line
+    if (!started && line && !structural && line.length < 60) continue;  // crumb before the first paragraph
+    if (line && (structural || line.length >= 60)) started = true;
+    out.push(raw); if (line) prev = line;
+  }
+  return out.join("\n");
 }
 // Minimal Markdown -> HTML for reader text. Everything is escaped first; only the constructs below are re-enabled.
 function md(src) {
