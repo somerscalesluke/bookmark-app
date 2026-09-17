@@ -147,7 +147,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:8px 0}
 .viewer .bar .t small{display:block;font:500 11px var(--mono);color:var(--muted);letter-spacing:.03em;margin-top:2px}
 .viewer .bar .iconbtn{color:var(--ink)}
 .viewer .bar .iconbtn:disabled{opacity:.3}
-.viewer .frame{flex:1;position:relative;background:#000}
+.viewer .frame{flex:1;min-height:0;position:relative;background:#000}
 .viewer iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
 .viewer .frame.light{background:var(--paper)}
 .viewer .frame.light iframe{background:var(--surface)}
@@ -155,7 +155,28 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:8px 0}
 .viewer .foot a{margin-left:auto;color:var(--ink);text-decoration:underline;text-underline-offset:3px}
 .viewer .fallback{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);background:var(--paper)}
 .viewer .fallback b{display:block;color:var(--ink);font:700 22px var(--display);margin-bottom:6px}
+.viewer .fallback .btn{display:inline-block;margin-top:14px}
 body.viewing{overflow:hidden}
+/* reader mode (articles that refuse to be framed) */
+.viewer .frame.light.readerwrap{overflow:auto;-webkit-overflow-scrolling:touch}
+.reader{max-width:680px;margin:0 auto;padding:22px var(--gutter) 60px;font:17px/1.6 var(--body);color:var(--ink);overflow-wrap:anywhere}
+.reader h1{font:700 clamp(26px,5vw,34px)/1.1 var(--display);letter-spacing:-.02em;margin:6px 0 16px}
+.reader h2{font:700 22px/1.2 var(--display);letter-spacing:-.015em;margin:28px 0 10px}
+.reader h3,.reader h4{font:700 18px/1.25 var(--display);margin:22px 0 8px}
+.reader p{margin:0 0 16px}
+.reader img{display:block;max-width:100%;height:auto;border-radius:10px;margin:14px 0;background:var(--line)}
+.reader a{color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--muted)}
+.reader ul,.reader ol{margin:0 0 16px 22px}
+.reader li{margin:4px 0}
+.reader blockquote{margin:0 0 16px;padding:2px 0 2px 14px;border-left:3px solid var(--marker);color:var(--muted)}
+.reader pre{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow:auto;font:13px/1.5 var(--mono);margin:0 0 16px}
+.reader code{font:.92em var(--mono);background:var(--paper);padding:1px 5px;border-radius:5px}
+.reader pre code{background:none;padding:0}
+.reader hr{border:0;border-top:1px solid var(--line);margin:24px 0}
+.reader .src{font:500 12px var(--mono);color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin-bottom:10px}
+.reader .loading{color:var(--muted);text-align:center;padding:60px 0;font:500 13px var(--mono)}
+.reader .loading::before{content:"";display:block;width:22px;height:22px;margin:0 auto 12px;border:3px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* auth + empty */
 .center{min-height:80vh;display:grid;place-items:center;text-align:center;padding:24px}
@@ -363,7 +384,7 @@ function renderItems() {
   grid.querySelectorAll("[data-more]").forEach((el) => el.onclick = (e) => { e.preventDefault(); itemMenu(el.dataset.more); });
   grid.querySelectorAll(".card").forEach((el) => el.addEventListener("click", (e) => {
     if (state.selecting) { e.preventDefault(); return toggleOne(el.dataset.id); }
-    if (e.target.closest("a") && openMode() === "app") { const it = state.items.find((x) => x.id === el.dataset.id); if (it && embedOf(it)) { e.preventDefault(); openViewer(it.id); } }
+    if (e.target.closest("a") && openMode() === "app") { e.preventDefault(); openViewer(el.dataset.id); }
   }));
   renderBulk();
 }
@@ -422,7 +443,7 @@ function itemMenu(id) {
   const it = state.items.find((x) => x.id === id); if (!it) return;
   const cur = state.boards.find((b) => b.id === it.board_id);
   sheet(`<h2>${esc(it.title || hostOf(it.url))}</h2><div class="sub">${cur ? "In " + esc(cur.name) : ""}${it.copied_from ? " · copy" : ""}</div>
-    ${embedOf(it) ? `<button class="opt" data-a="preview">Preview in app</button>` : ""}
+    <button class="opt" data-a="preview">${embedOf(it) ? "Preview in app" : "Read in app"}</button>
     <button class="opt" data-a="open">Open in browser <span class="k">${esc(hostOf(it.url))}</span></button>
     <button class="opt" data-a="edit">Edit title & description</button>
     <button class="opt" data-a="move">Move to another board</button>
@@ -496,7 +517,7 @@ const openMode = () => { try { return localStorage.getItem("open.mode") === "bro
 const setOpenMode = (m) => { try { localStorage.setItem("open.mode", m); } catch {} };
 const viewer = { id: null, list: [] };
 function openViewer(id, fromHistory) {
-  const list = visibleItems().filter((i) => embedOf(i)); // thumb through only what can show in-app
+  const list = visibleItems(); // everything shows in-app now: platform embed, framed page, or reader text
   const it = state.items.find((x) => x.id === id); if (!it) return;
   if (!fromHistory && !viewer.id) history.pushState({ viewer: id }, "");
   else if (!fromHistory) history.replaceState({ viewer: id }, "");
@@ -512,18 +533,72 @@ function openViewer(id, fromHistory) {
       <button class="iconbtn" data-v="next" aria-label="Next" ${idx >= list.length - 1 ? "disabled" : ""}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m10 6 6 6-6 6"/></svg></button>
       <button class="iconbtn" data-v="more" aria-label="More"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
     </div>
-    <div class="frame ${em && em.light ? "light" : ""}">${em ? `<iframe src="${esc(em.src)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>` : `<div class="fallback"><b>No in-app preview</b>This site doesn't allow embedding.</div>`}</div>
-    <div class="foot"><span>${esc(em ? em.kind : "page")}</span><a href="${esc(it.url)}" target="_blank" rel="noopener">Open in browser ↗</a></div>
+    <div class="frame ${em ? (em.light ? "light" : "") : "light readerwrap"}">${em ? `<iframe src="${esc(em.src)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>` : `<article class="reader" id="reader"><div class="loading">Fetching article…</div></article>`}</div>
+    <div class="foot"><span>${esc(em ? em.kind : "reader")}</span><a href="${esc(it.url)}" target="_blank" rel="noopener">Open in browser ↗</a></div>
   </div>`);
   const v = $("#viewer");
   v.querySelector('[data-v="close"]').onclick = () => closeViewer();
   v.querySelector('[data-v="close"]').focus({ preventScroll: true });
+  if (!em) loadReader(it);
   v.querySelector('[data-v="prev"]').onclick = () => nav(-1);
   v.querySelector('[data-v="next"]').onclick = () => nav(1);
   v.querySelector('[data-v="more"]').onclick = () => itemMenu(it.id);
   // swipe left/right on the bar to move between cards (the iframe eats touches in the body)
   let x0 = null; v.querySelector(".bar").addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
   v.querySelector(".bar").addEventListener("touchend", (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 60) nav(dx < 0 ? 1 : -1); }, { passive: true });
+}
+// ---------- reader mode ----------
+const readerCache = new Map();   // item id -> {title, markdown} for this session
+async function loadReader(it) {
+  const box = $("#reader"); if (!box) return;
+  let r = readerCache.get(it.id);
+  if (!r) {
+    const { data, error } = await sb.functions.invoke("read", { body: { item_id: it.id } });
+    if (viewer.id !== it.id) return;                       // user moved on while we were fetching
+    if (error || !data?.markdown) {
+      let msg = data?.error || error?.message || "Couldn't fetch the article text";
+      try { const j = await error?.context?.json(); if (j?.error) msg = j.error; } catch {}
+      $("#viewer .frame").innerHTML = `<div class="fallback"><b>No reader view</b>${esc(msg)}.<br><a class="btn" href="${esc(it.url)}" target="_blank" rel="noopener">Open in browser ↗</a></div>`;
+      return;
+    }
+    r = data; readerCache.set(it.id, r);
+  }
+  const host = hostOf(it.url).replace(/^www\./, "");
+  const heading = /^\s*#\s/.test(r.markdown) ? "" : `<h1>${esc(r.title || it.title || host)}</h1>`;
+  box.innerHTML = `<div class="src">${esc(host)}${r.stale ? " · cached copy" : ""}</div>${heading}${md(r.markdown)}`;
+  box.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
+  box.parentElement.scrollTop = 0;
+}
+// Minimal Markdown -> HTML for reader text. Everything is escaped first; only the constructs below are re-enabled.
+function md(src) {
+  const inline = (s) => esc(s)
+    .replace(/!\[([^\]]*)\]\((https?:[^)\s]+)[^)]*\)/g, (_, alt, u) => `<img src="${u}" alt="${alt}" loading="lazy">`)
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)[^)]*\)/g, (_, t, u) => `<a href="${u}">${t}</a>`)
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>").replace(/__([^_\n]+)__/g, "<strong>$1</strong>")
+    .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, "$1<em>$2</em>");
+  const lines = src.replace(/\r/g, "").split("\n"), out = []; let para = [], list = null, quote = [], code = null;
+  const flushP = () => { if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
+  const flushL = () => { if (list) { out.push(`<${list.t}>${list.items.map((i) => `<li>${inline(i)}</li>`).join("")}</${list.t}>`); list = null; } };
+  const flushQ = () => { if (quote.length) { out.push(`<blockquote>${inline(quote.join(" "))}</blockquote>`); quote = []; } };
+  const flushAll = () => { flushP(); flushL(); flushQ(); };
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (code !== null) { if (/^```/.test(line)) { out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`); code = null; } else code.push(raw); continue; }
+    if (/^```/.test(line)) { flushAll(); code = []; continue; }
+    if (!line.trim()) { flushAll(); continue; }
+    let m;
+    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) { flushAll(); const n = Math.min(m[1].length, 4); out.push(`<h${n}>${inline(m[2].replace(/\s#+$/, ""))}</h${n}>`); continue; }
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) { flushAll(); out.push("<hr>"); continue; }
+    if ((m = line.match(/^\s*>\s?(.*)$/))) { flushP(); flushL(); quote.push(m[1]); continue; }
+    if ((m = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/))) { flushP(); flushQ(); const t = /^\s*\d/.test(line) ? "ol" : "ul"; if (!list || list.t !== t) { flushL(); list = { t, items: [] }; } list.items.push(m[1]); continue; }
+    if ((m = line.match(/^\s*!\[([^\]]*)\]\((https?:[^)\s]+)[^)]*\)\s*$/))) { flushAll(); out.push(`<p>${inline(line.trim())}</p>`); continue; }
+    if (list && /^\s{2,}/.test(raw)) { list.items[list.items.length - 1] += " " + line.trim(); continue; }
+    flushL(); flushQ(); para.push(line.trim());
+  }
+  if (code !== null) out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`);
+  flushAll();
+  return out.join("\n");
 }
 function closeViewer(fromHistory) {
   if (!viewer.id) return;
@@ -537,7 +612,7 @@ window.addEventListener("popstate", (e) => {
 function settingsSheet() {
   const m = openMode();
   sheet(`<h2>Settings</h2><div class="lbl">Open cards</div>
-    <button class="opt ${m === "app" ? "current" : ""}" data-a="mode:app">In app<span class="hint">YouTube, TikTok, Instagram preview here</span></button>
+    <button class="opt ${m === "app" ? "current" : ""}" data-a="mode:app">In app<span class="hint">videos &amp; posts embed, articles as reader text</span></button>
     <button class="opt ${m === "browser" ? "current" : ""}" data-a="mode:browser">In browser<span class="hint">always leave the app</span></button>
     <hr class="sep"><button class="opt" data-a="signout">Sign out <span class="k">${esc(state.user?.email || "")}</span></button>`, async (a) => {
     if (a.startsWith("mode:")) { setOpenMode(a.slice(5)); toast(a.endsWith("app") ? "Cards open in app" : "Cards open in the browser"); }
