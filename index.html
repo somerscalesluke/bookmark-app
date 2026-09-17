@@ -280,7 +280,7 @@ async function loadBoards() {
   state.boards = (data ?? []).sort((a, b) => (a.name === "Unsorted") - (b.name === "Unsorted") || b.item_count - a.item_count || a.name.localeCompare(b.name));
 }
 async function loadItems(boardId) {
-  let qy = sb.from("items").select("id,board_id,url,canonical_url,source,title,description,author,site_name,thumbnail_url,original_thumbnail_url,ai_summary,ai_tags,ai_confidence,status,created_at,updated_at,blurb,copied_from").order("created_at", { ascending: false }).limit(600);
+  let qy = sb.from("items").select("id,board_id,url,canonical_url,source,title,description,author,site_name,thumbnail_url,original_thumbnail_url,ai_summary,ai_tags,ai_confidence,status,created_at,updated_at,blurb,copied_from,embeddable").order("created_at", { ascending: false }).limit(600);
   if (boardId) qy = qy.eq("board_id", boardId);
   const { data, error } = await qy;
   if (error) return toast(error.message);
@@ -482,12 +482,12 @@ async function boardAction(act, b) {
 
 // ---------- in-app preview ----------
 // Official embed endpoints are iframe-friendly; the original pages mostly are not (X-Frame-Options).
-// Articles: until ingest stores an `embeddable` flag (batch 2) they open in the browser.
+// Articles: embed the page itself when ingest found no framing restriction (items.embeddable, batch 2); otherwise open in the browser.
 function embedOf(it) {
   const u = it.canonical_url || it.url || "";
   let m;
   if ((m = u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{6,})/))) return { src: `https://www.youtube-nocookie.com/embed/${m[1]}?playsinline=1&autoplay=1&rel=0`, kind: "youtube" };
-  if ((m = u.match(/tiktok\.com\/.*\/video\/(\d+)/))) return { src: `https://www.tiktok.com/embed/v2/${m[1]}`, kind: "tiktok" };
+  if ((m = u.match(/tiktok\.com\/.*\/video\/(\d+)/))) return { src: `https://www.tiktok.com/embed/v2/${m[1]}`, kind: "tiktok", light: true };
   if ((m = u.match(/instagram\.com\/(?:[^/]+\/)?(?:p|reel|reels|tv)\/([\w-]+)/))) return { src: `https://www.instagram.com/p/${m[1]}/embed/captioned/`, kind: "instagram", light: true };
   if (it.embeddable === true) return { src: it.url, kind: "page", light: true };
   return null;
