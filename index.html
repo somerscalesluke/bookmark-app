@@ -100,7 +100,7 @@ h1{font:700 clamp(28px,4vw,40px)/1.05 var(--display);letter-spacing:-.025em}
 .card.partial .title::before{content:"no preview · ";color:var(--muted);font-weight:500}
 
 /* sheet / dialogs */
-.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:30;display:flex;align-items:flex-end;justify-content:center}
 @media (min-width:640px){.scrim{align-items:center}}
 .sheet{background:var(--surface);width:min(100%,480px);max-height:80vh;overflow:auto;border-radius:20px 20px 0 0;padding:14px 16px calc(env(safe-area-inset-bottom) + 16px);box-shadow:var(--shadow)}
 @media (min-width:640px){.sheet{border-radius:18px}}
@@ -139,13 +139,31 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:8px 0}
 .bulk button.danger{color:#FF8A75}
 .bulk button.x{opacity:.7;padding:8px 10px}
 
+/* in-app preview */
+.viewer{position:fixed;inset:0;z-index:25;background:var(--paper);display:flex;flex-direction:column;animation:rise .22s cubic-bezier(.2,.7,.2,1)}
+@keyframes rise{from{transform:translateY(24px);opacity:0}}
+.viewer .bar{display:flex;align-items:center;gap:6px;padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;border-bottom:1px solid var(--line);background:var(--surface)}
+.viewer .bar .t{flex:1;min-width:0;font:600 14px/1.25 var(--body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.viewer .bar .t small{display:block;font:500 11px var(--mono);color:var(--muted);letter-spacing:.03em;margin-top:2px}
+.viewer .bar .iconbtn{color:var(--ink)}
+.viewer .bar .iconbtn:disabled{opacity:.3}
+.viewer .frame{flex:1;position:relative;background:#000}
+.viewer iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+.viewer .frame.light{background:var(--paper)}
+.viewer .frame.light iframe{background:var(--surface)}
+.viewer .foot{display:flex;gap:8px;padding:8px 12px calc(env(safe-area-inset-bottom) + 8px);background:var(--surface);border-top:1px solid var(--line);font:500 12px var(--mono);color:var(--muted);align-items:center}
+.viewer .foot a{margin-left:auto;color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.viewer .fallback{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);background:var(--paper)}
+.viewer .fallback b{display:block;color:var(--ink);font:700 22px var(--display);margin-bottom:6px}
+body.viewing{overflow:hidden}
+
 /* auth + empty */
 .center{min-height:80vh;display:grid;place-items:center;text-align:center;padding:24px}
 .center .box{max-width:360px}
 .center p{color:var(--muted);margin:8px 0 18px}
 .empty{color:var(--muted);text-align:center;padding:60px 20px;font-size:15px}
 .empty b{color:var(--ink);display:block;font:700 22px var(--display);margin-bottom:6px}
-.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-weight:500;z-index:30;box-shadow:var(--shadow);animation:pop .2s}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-weight:500;z-index:40;box-shadow:var(--shadow);animation:pop .2s}
 @keyframes pop{from{opacity:0;transform:translate(-50%,8px)}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -154,7 +172,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:8px 0}
 <header>
   <a class="brand" href="#" id="home"><i></i>Saved</a>
   <label class="search hide" id="searchWrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="search" type="search" placeholder="Search everything you saved" autocomplete="off"></label>
-  <button class="iconbtn hide" id="signout" title="Sign out" aria-label="Sign out"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M21 4v16"/></svg></button>
+  <button class="iconbtn hide" id="settings" title="Settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
 <main id="main"></main>
 <div id="layer"></div>
@@ -240,7 +258,7 @@ async function boot() {
   route();
 }
 function renderAuth(sent) {
-  $("#searchWrap").classList.add("hide"); $("#signout").classList.add("hide");
+  $("#searchWrap").classList.add("hide"); $("#settings").classList.add("hide");
   main.innerHTML = `<div class="center"><div class="box">
     <h1><span class="mark">Saved</span></h1>
     <p>${sent ? "Check your email for a sign-in link. Open it on this device." : "Everything you shared from your phone, sorted into boards."}</p>
@@ -272,7 +290,7 @@ async function loadItems(boardId) {
 // ---------- routing ----------
 function route() {
   if (!state.user) return renderAuth(false);
-  $("#searchWrap").classList.remove("hide"); $("#signout").classList.remove("hide");
+  $("#searchWrap").classList.remove("hide"); $("#settings").classList.remove("hide");
   const id = location.hash.replace(/^#\/?/, "");
   if (id === "all") return renderBoard(null);
   if (id) return renderBoard(id);
@@ -280,7 +298,7 @@ function route() {
 }
 window.addEventListener("hashchange", route);
 $("#home").onclick = (e) => { e.preventDefault(); location.hash = ""; };
-$("#signout").onclick = async () => { await sb.auth.signOut(); location.hash = ""; };
+$("#settings").onclick = () => settingsSheet();
 $("#search").addEventListener("input", (e) => { state.q = e.target.value.trim().toLowerCase(); if (state.board === undefined) return; renderItems(); });
 $("#search").addEventListener("focus", () => { if (!location.hash) location.hash = "#all"; });
 
@@ -343,7 +361,10 @@ function renderItems() {
     <button class="more" aria-label="More" data-more="${i.id}"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
   </article>`).join("");
   grid.querySelectorAll("[data-more]").forEach((el) => el.onclick = (e) => { e.preventDefault(); itemMenu(el.dataset.more); });
-  grid.querySelectorAll(".card").forEach((el) => el.addEventListener("click", (e) => { if (!state.selecting) return; e.preventDefault(); toggleOne(el.dataset.id); }));
+  grid.querySelectorAll(".card").forEach((el) => el.addEventListener("click", (e) => {
+    if (state.selecting) { e.preventDefault(); return toggleOne(el.dataset.id); }
+    if (e.target.closest("a") && openMode() === "app") { const it = state.items.find((x) => x.id === el.dataset.id); if (it && embedOf(it)) { e.preventDefault(); openViewer(it.id); } }
+  }));
   renderBulk();
 }
 const hostOf = (u) => { try { return new URL(u).hostname; } catch { return ""; } };
@@ -401,18 +422,20 @@ function itemMenu(id) {
   const it = state.items.find((x) => x.id === id); if (!it) return;
   const cur = state.boards.find((b) => b.id === it.board_id);
   sheet(`<h2>${esc(it.title || hostOf(it.url))}</h2><div class="sub">${cur ? "In " + esc(cur.name) : ""}${it.copied_from ? " · copy" : ""}</div>
-    <button class="opt" data-a="open">Open original <span class="k">${esc(hostOf(it.url))}</span></button>
+    ${embedOf(it) ? `<button class="opt" data-a="preview">Preview in app</button>` : ""}
+    <button class="opt" data-a="open">Open in browser <span class="k">${esc(hostOf(it.url))}</span></button>
     <button class="opt" data-a="edit">Edit title & description</button>
     <button class="opt" data-a="move">Move to another board</button>
     <button class="opt" data-a="copyto">Copy to another board</button>
     <button class="opt" data-a="copy">Copy link</button>
     <hr class="sep"><button class="opt danger" data-a="delete">Delete</button>`, async (a) => {
     if (a === "open") window.open(it.url, "_blank");
+    if (a === "preview") openViewer(it.id);
     if (a === "copy") { await navigator.clipboard.writeText(it.url); toast("Link copied"); }
     if (a === "edit") editItem(it);
     if (a === "move") pickBoard("Move to", (b) => moveMany([it.id], b), it.board_id);
     if (a === "copyto") pickBoard("Copy to", (b) => copyMany([it.id], b), it.board_id);
-    if (a === "delete") { if (!confirm("Delete this card?")) return; const { error } = await sb.from("items").delete().eq("id", it.id); if (error) return toast(error.message); state.items = state.items.filter((x) => x.id !== it.id); loadBoards(); renderItems(); toast("Deleted"); }
+    if (a === "delete") { if (!confirm("Delete this card?")) return; const { error } = await sb.from("items").delete().eq("id", it.id); if (error) return toast(error.message); state.items = state.items.filter((x) => x.id !== it.id); if (viewer.id === it.id) closeViewer(); loadBoards(); renderItems(); toast("Deleted"); }
   });
 }
 function editItem(it) {
@@ -457,6 +480,71 @@ async function boardAction(act, b) {
   }
 }
 
+// ---------- in-app preview ----------
+// Official embed endpoints are iframe-friendly; the original pages mostly are not (X-Frame-Options).
+// Articles: until ingest stores an `embeddable` flag (batch 2) they open in the browser.
+function embedOf(it) {
+  const u = it.canonical_url || it.url || "";
+  let m;
+  if ((m = u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{6,})/))) return { src: `https://www.youtube-nocookie.com/embed/${m[1]}?playsinline=1&autoplay=1&rel=0`, kind: "youtube" };
+  if ((m = u.match(/tiktok\.com\/.*\/video\/(\d+)/))) return { src: `https://www.tiktok.com/embed/v2/${m[1]}`, kind: "tiktok" };
+  if ((m = u.match(/instagram\.com\/(?:[^/]+\/)?(?:p|reel|reels|tv)\/([\w-]+)/))) return { src: `https://www.instagram.com/p/${m[1]}/embed/captioned/`, kind: "instagram", light: true };
+  if (it.embeddable === true) return { src: it.url, kind: "page", light: true };
+  return null;
+}
+const openMode = () => { try { return localStorage.getItem("open.mode") === "browser" ? "browser" : "app"; } catch { return "app"; } };
+const setOpenMode = (m) => { try { localStorage.setItem("open.mode", m); } catch {} };
+const viewer = { id: null, list: [] };
+function openViewer(id, fromHistory) {
+  const list = visibleItems().filter((i) => embedOf(i)); // thumb through only what can show in-app
+  const it = state.items.find((x) => x.id === id); if (!it) return;
+  if (!fromHistory && !viewer.id) history.pushState({ viewer: id }, "");
+  else if (!fromHistory) history.replaceState({ viewer: id }, "");
+  viewer.id = id; viewer.list = list;
+  const idx = list.findIndex((i) => i.id === id), em = embedOf(it);
+  const nav = (dir) => { const n = list[idx + dir]; if (n) openViewer(n.id); };
+  $("#viewer")?.remove(); document.body.classList.add("viewing");
+  layer.insertAdjacentHTML("beforeend", `<div class="viewer" id="viewer" role="dialog" aria-label="Preview">
+    <div class="bar">
+      <button class="iconbtn" data-v="close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m15 5-7 7 7 7"/></svg></button>
+      <div class="t">${esc(it.title || hostOf(it.url))}<small>${esc(it.author || it.site_name || hostOf(it.url))}${list.length > 1 ? ` · ${idx + 1}/${list.length}` : ""}</small></div>
+      <button class="iconbtn" data-v="prev" aria-label="Previous" ${idx <= 0 ? "disabled" : ""}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m14 6-6 6 6 6"/></svg></button>
+      <button class="iconbtn" data-v="next" aria-label="Next" ${idx >= list.length - 1 ? "disabled" : ""}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m10 6 6 6-6 6"/></svg></button>
+      <button class="iconbtn" data-v="more" aria-label="More"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+    </div>
+    <div class="frame ${em && em.light ? "light" : ""}">${em ? `<iframe src="${esc(em.src)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>` : `<div class="fallback"><b>No in-app preview</b>This site doesn't allow embedding.</div>`}</div>
+    <div class="foot"><span>${esc(em ? em.kind : "page")}</span><a href="${esc(it.url)}" target="_blank" rel="noopener">Open in browser ↗</a></div>
+  </div>`);
+  const v = $("#viewer");
+  v.querySelector('[data-v="close"]').onclick = () => closeViewer();
+  v.querySelector('[data-v="close"]').focus({ preventScroll: true });
+  v.querySelector('[data-v="prev"]').onclick = () => nav(-1);
+  v.querySelector('[data-v="next"]').onclick = () => nav(1);
+  v.querySelector('[data-v="more"]').onclick = () => itemMenu(it.id);
+  // swipe left/right on the bar to move between cards (the iframe eats touches in the body)
+  let x0 = null; v.querySelector(".bar").addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  v.querySelector(".bar").addEventListener("touchend", (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 60) nav(dx < 0 ? 1 : -1); }, { passive: true });
+}
+function closeViewer(fromHistory) {
+  if (!viewer.id) return;
+  viewer.id = null; viewer.list = []; $("#viewer")?.remove(); document.body.classList.remove("viewing");
+  if (!fromHistory && history.state?.viewer) history.back();
+}
+window.addEventListener("popstate", (e) => {
+  if (e.state?.viewer && state.user) return openViewer(e.state.viewer, true);
+  if (viewer.id) closeViewer(true);
+});
+function settingsSheet() {
+  const m = openMode();
+  sheet(`<h2>Settings</h2><div class="lbl">Open cards</div>
+    <button class="opt ${m === "app" ? "current" : ""}" data-a="mode:app">In app<span class="hint">YouTube, TikTok, Instagram preview here</span></button>
+    <button class="opt ${m === "browser" ? "current" : ""}" data-a="mode:browser">In browser<span class="hint">always leave the app</span></button>
+    <hr class="sep"><button class="opt" data-a="signout">Sign out <span class="k">${esc(state.user?.email || "")}</span></button>`, async (a) => {
+    if (a.startsWith("mode:")) { setOpenMode(a.slice(5)); toast(a.endsWith("app") ? "Cards open in app" : "Cards open in the browser"); }
+    if (a === "signout") { await sb.auth.signOut(); location.hash = ""; }
+  });
+}
+
 // ---------- ui bits ----------
 function sheet(html, onPick, onSubmit) {
   $("#scrim")?.remove(); layer.insertAdjacentHTML("beforeend", `<div class="scrim" id="scrim"><div class="sheet" role="dialog">${html}</div></div>`);
@@ -466,7 +554,7 @@ function sheet(html, onPick, onSubmit) {
   layer.querySelector("input")?.focus();
 }
 function closeSheet() { $("#scrim")?.remove(); }
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#scrim") ? closeSheet() : exitSelect(); } });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if ($("#scrim")) return closeSheet(); if (viewer.id) return closeViewer(); exitSelect(); } });
 let toastT; function toast(msg) { clearTimeout(toastT); $("#toast")?.remove(); layer.insertAdjacentHTML("beforeend", `<div class="toast" id="toast">${esc(msg)}</div>`); toastT = setTimeout(() => $("#toast")?.remove(), 2200); }
 document.addEventListener("visibilitychange", () => { if (!document.hidden && state.user) route(); });
 boot();
