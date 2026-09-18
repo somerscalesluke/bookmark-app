@@ -1,4 +1,4 @@
-// bookmark-app — ingest edge function (v7)
+// bookmark-app — ingest edge function (v8)
 // POST /ingest  { url, mode?: "auto" | "board", board_id?, board_name?, note? }
 // Auth: x-api-key header (static key issued per user, hashed in public.api_keys)
 //
@@ -516,8 +516,8 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
   const inputUrl: string | undefined = body.url ?? body.text?.match(/https?:\/\/\S+/)?.[0];
   if (!inputUrl) return json({ error: "url required", message: "Nothing to save — no link found" }, 400);
-  // Picker sentinels: "Auto" -> AI files it; "New folder" with no name supplied -> also auto (Shortcut should have asked for a name).
-  if (typeof body.board_name === "string" && /^(auto|new folder)$/i.test(body.board_name.replace(/[^a-z0-9 ]/gi, "").trim())) { body.mode = "auto"; delete body.board_name; }
+  // Picker sentinels: "[Auto Sort]"/"Auto" -> AI files it; "+New Board"/"New folder" with no name supplied -> also auto (Shortcut should have asked for a name).
+  if (typeof body.board_name === "string" && /^(auto( sort)?|new (folder|board))$/i.test(body.board_name.replace(/[^a-z0-9 ]/gi, "").trim())) { body.mode = "auto"; delete body.board_name; }
   const mode: "auto" | "board" = body.mode === "board" || (typeof body.board_name === "string" && body.board_name.trim()) ? "board" : "auto";
   const note: string | undefined = body.note?.toString().slice(0, 500) || undefined;
   const dryRun = body.dry_run === true;            // run the pipeline, return the result, insert nothing
