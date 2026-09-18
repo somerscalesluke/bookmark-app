@@ -1,4 +1,4 @@
-// bookmark-app — boards edge function
+// bookmark-app — boards edge function (v7)
 // GET  /boards            -> list boards with counts + cover thumbnails (Shortcut picker / viewer)
 // POST /boards { name }   -> create a user board
 // Auth: x-api-key header
@@ -36,7 +36,9 @@ Deno.serve(async (req) => {
     // Shortcuts "Choose from List" works best with a flat names array too.
     const names = (data ?? []).map((b) => b.name).filter((n) => n !== "Unsorted");
     // `picker` is the ready-made menu for the iOS Shortcut's "Choose from List".
-    return json({ boards: data, names, picker: ["New folder", ...names, "Auto"] });
+    // Special rows carry a symbol so they read differently from board names in the iOS "Choose from List"
+    // (Shortcuts can't style rows). Ingest strips symbols before matching these sentinels.
+    return json({ boards: data, names, picker: ["+New Board", ...names, "[Auto Sort]"] });
   }
   if (req.method === "POST") {
     let body: any; try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
